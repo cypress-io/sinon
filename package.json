@@ -45,6 +45,7 @@
   },
   "files": [
     "lib",
+    "dist",
     "pkg",
     "AUTHORS",
     "CONTRIBUTING.md",
