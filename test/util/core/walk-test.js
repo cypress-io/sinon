@@ -2,7 +2,6 @@
 
 var referee = require("referee");
 var walk = require("../../../lib/sinon/util/core/walk");
-var createInstance = require("../../../lib/sinon/util/core/create");
 var createSpy = require("../../../lib/sinon/spy");
 var assert = referee.assert;
 
@@ -125,7 +124,7 @@ describe("util/core/walk", function () {
         }
         /* eslint-enable guard-for-in */
 
-        try {
+        try { // eslint-disable-line no-restricted-syntax
             walk(target, iterator, rcvr);
             assert.equals(iterator.callCount, numCalls);
             assert(iterator.alwaysCalledOn(rcvr));
@@ -144,7 +143,7 @@ describe("util/core/walk", function () {
         var parent = {
             func: function parentFunc() {}
         };
-        var child = createInstance(parent);
+        var child = Object.create(parent);
         child.func = function childFunc() {};
         var iterator = createSpy();
 

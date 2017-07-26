@@ -19,13 +19,7 @@ var globalActiveXObject = global.ActiveXObject;
 var supportsProgressEvents = typeof ProgressEvent !== "undefined";
 var supportsFormData = typeof FormData !== "undefined";
 var supportsArrayBuffer = typeof ArrayBuffer !== "undefined";
-var supportsBlob = (function () {
-    try {
-        return !!new Blob();
-    } catch (e) {
-        return false;
-    }
-})();
+var supportsBlob = require("../../lib/sinon/blob").isSupported;
 
 var fakeXhrSetUp = function () {
     this.fakeXhr = sinonFakeXhr.useFakeXMLHttpRequest();
@@ -38,7 +32,7 @@ var fakeXhrTearDown = function () {
 };
 
 var runWithWorkingXHROveride = function (workingXHR, test) {
-    try {
+    try { // eslint-disable-line no-restricted-syntax
         var original = sinonFakeXhr.xhr.workingXHR;
         sinonFakeXhr.xhr.workingXHR = workingXHR;
         test();
@@ -152,7 +146,7 @@ if (typeof window !== "undefined") {
             var onCreate = sinonSpy();
             FakeXMLHttpRequest.onCreate = onCreate;
 
-            // instantiating FakeXMLHttpRequest for it's onCreate side effect
+            // instantiating FakeXMLHttpRequest for its onCreate side effect
             var xhr = new FakeXMLHttpRequest(); // eslint-disable-line no-unused-vars
 
             assert(onCreate.called);
@@ -1815,7 +1809,7 @@ if (typeof window !== "undefined") {
 
             it("performs initial readystatechange on opening when filters are being used, but don't match",
                 function () {
-                    try {
+                    try { // eslint-disable-line no-restricted-syntax
                         FakeXMLHttpRequest.useFilters = true;
                         var spy = sinonSpy();
                         this.fakeXhr.addEventListener("readystatechange", spy);
@@ -1843,6 +1837,7 @@ if (typeof window !== "undefined") {
                 FakeXMLHttpRequest.restore();
             });
 
+            // eslint-disable-next-line mocha/no-skipped-tests
             it.skip("loads resource asynchronously", function (done) {
                 var req = new XMLHttpRequest();
 
@@ -1858,6 +1853,7 @@ if (typeof window !== "undefined") {
                 req.send();
             });
 
+            // eslint-disable-next-line mocha/no-skipped-tests
             it.skip("loads resource synchronously", function () {
                 var req = new XMLHttpRequest();
                 req.open("GET", "/test/resources/xhr_target.txt", false);
@@ -2207,6 +2203,19 @@ if (typeof window !== "undefined") {
                         loaded: 20
                     });
                 });
+
+                it("calls .onprogress", function (done) {
+                    this.xhr.upload.onprogress = function (e) {
+                        assert.equals(e.total, 100);
+                        assert.equals(e.loaded, 20);
+                        assert.isTrue(e.lengthComputable);
+                        done();
+                    };
+                    this.xhr.uploadProgress({
+                        total: 100,
+                        loaded: 20
+                    });
+                });
             }
 
             it("triggers 'load' event on success", function (done) {
@@ -2308,12 +2317,6 @@ if (typeof window !== "undefined") {
                 });
             }
 
-            it("event listeners can be removed", function () {
-                var callback = function () {};
-                this.xhr.upload.addEventListener("load", callback);
-                this.xhr.upload.removeEventListener("load", callback);
-                assert.equals(this.xhr.upload.eventListeners.load.length, 0);
-            });
         });
     });
 }

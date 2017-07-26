@@ -2,10 +2,10 @@
 
 var referee = require("referee");
 var sinon = require("../../lib/sinon");
+var sinonSandbox = require("../../lib/sinon/sandbox");
 var configureLogError = require("../../lib/sinon/util/core/log_error.js");
 var assert = referee.assert;
 var refute = referee.refute;
-
 
 describe("issues", function () {
     beforeEach(function () {
@@ -38,26 +38,6 @@ describe("issues", function () {
         testSinonFakeTimersWith(1000, 1001);
     });
 
-    it.skip("#397", function () {
-        var clock = sinon.useFakeTimers();
-
-        var cb2 = sinon.spy();
-        var cb1 = sinon.spy(function () {
-            setTimeout(cb2, 0);
-        });
-
-        setTimeout(cb1, 0);
-
-        clock.tick(10);
-        assert(cb1.called);
-        assert(!cb2.called);
-
-        clock.tick(10);
-        assert(cb2.called);
-
-        clock.restore();
-    });
-
     describe("#458", function () {
         if (typeof require("fs").readFileSync !== "undefined") {
             describe("on node", function () {
@@ -74,6 +54,7 @@ describe("issues", function () {
     });
 
     describe("#624", function () {
+        // eslint-disable-next-line mocha/no-skipped-tests
         it.skip("useFakeTimers should be idempotent", function () {
             // Issue #624 shows that useFakeTimers is not idempotent when it comes to
             // using Date.now
@@ -97,18 +78,24 @@ describe("issues", function () {
 
             // passes
             var err = { name: "TestError", message: "this is a proper exception" };
-            try {
-                logError("#835 test", err);
-            } catch (ex) {
-                assert.equals(ex.name, err.name);
-            }
+            assert.exception(
+                function () {
+                    logError("#835 test", err);
+                },
+                {
+                    name: err.name
+                }
+            );
 
             // fails until this issue is fixed
-            try {
-                logError("#835 test", "this literal string is not a proper exception");
-            } catch (ex) {
-                assert.equals(ex.name, "#835 test");
-            }
+            assert.exception(
+                function () {
+                    logError("#835 test", "this literal string is not a proper exception");
+                },
+                {
+                    name: "#835 test"
+                }
+            );
         });
     });
 
@@ -136,6 +123,36 @@ describe("issues", function () {
         });
     });
 
+    describe("#950 - first execution of a spy as a method renames that spy", function () {
+        function bob() {}
+
+        // IE 11 does not support the function name property
+        if (bob.name) {
+            it("should not rename spies", function () {
+                var expectedName = "proxy";
+                var spy = sinon.spy(bob);
+
+                assert.equals(spy.name, expectedName);
+
+                var obj = { methodName: spy };
+                assert.equals(spy.name, expectedName);
+
+                spy();
+                assert.equals(spy.name, expectedName);
+
+                obj.methodName.call(null);
+                assert.equals(spy.name, expectedName);
+
+                obj.methodName();
+                assert.equals(spy.name, expectedName);
+
+                obj.otherProp = spy;
+                obj.otherProp();
+                assert.equals(spy.name, expectedName);
+            });
+        }
+    });
+
     describe("#1026", function () {
         it("should stub `watch` method on any Object", function () {
             // makes sure that Object.prototype.watch is set back to its old value
@@ -147,7 +164,7 @@ describe("issues", function () {
                 }
             }
 
-            try {
+            try { // eslint-disable-line no-restricted-syntax
                 var oldWatch = Object.prototype.watch;
 
                 if (typeof Object.prototype.watch !== "function") {
@@ -192,12 +209,109 @@ describe("issues", function () {
             var argsB = match(suffixB);
 
             var firstFake = readFile
-              .withArgs(argsA);
+                .withArgs(argsA);
 
             var secondFake = readFile
-              .withArgs(argsB);
+                .withArgs(argsB);
 
             assert(firstFake !== secondFake);
+        });
+    });
+
+    describe("#1372 - sandbox.resetHistory", function () {
+        it("should reset spies", function () {
+            var spy = this.sandbox.spy();
+
+            spy();
+            assert.equals(spy.callCount, 1);
+
+            spy();
+            assert.equals(spy.callCount, 2);
+
+            this.sandbox.resetHistory();
+
+            spy();
+            assert.equals(spy.callCount, 1);  // should not fail but fails
+        });
+    });
+
+    describe("#1398", function () {
+        it("Call order takes into account both calledBefore and callCount", function () {
+            var s1 = sinon.spy();
+            var s2 = sinon.spy();
+
+            s1();
+            s2();
+            s1();
+
+            assert.exception(function () {
+                sinon.assert.callOrder(s2, s1, s2);
+            });
+        });
+    });
+
+    describe("#1474 - stub.onCall", function () {
+        it("should preserve promise library", function () {
+            var promiseLib = {
+                resolve: function (value) {
+                    var promise = Promise.resolve(value);
+                    promise.tap = function () {
+                        return "tap " + value;
+                    };
+
+                    return promise;
+                }
+            };
+            var stub = sinon.stub().usingPromise(promiseLib);
+
+            stub.resolves("resolved");
+            stub.onSecondCall().resolves("resolved again");
+
+            var first = stub();
+            var second = stub();
+
+            assert.isFunction(first.then);
+            assert.isFunction(first.tap);
+
+            assert.isFunction(second.then);
+            assert.isFunction(second.tap);
+
+            assert.equals(first.tap(), "tap resolved");
+            assert.equals(second.tap(), "tap resolved again");
+        });
+    });
+
+
+    describe("#1456", function () {
+        var sandbox;
+
+        function throwsOnUnconfigurableProperty() {
+            /* eslint-disable no-restricted-syntax */
+            try {
+                var preDescriptor = Object.getOwnPropertyDescriptor(window, "innerHeight"); //backup val
+                Object.defineProperty(window, "innerHeight", { value: 10, configureable: true, writeable: true });
+                Object.defineProperty(window, "innerHeight", preDescriptor); //restore
+                return false;
+            } catch (err) {
+                return true;
+            }
+            /* eslint-enable no-restricted-syntax */
+        }
+
+        beforeEach(function () {
+            if (typeof window === "undefined" || throwsOnUnconfigurableProperty()) { this.skip(); }
+
+            sandbox = sinonSandbox.create();
+        });
+
+        afterEach(function () {
+            sandbox.restore();
+        });
+
+        it("stub window innerHeight", function () {
+            sandbox.stub(window, "innerHeight").value(111);
+
+            assert.equals(window.innerHeight, 111);
         });
     });
 });

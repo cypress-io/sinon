@@ -4,11 +4,11 @@ var referee = require("referee");
 var samsam = require("samsam");
 var assert = referee.assert;
 var refute = referee.refute;
+var fakeXhr = require("../lib/sinon/util/fake_xml_http_request");
 var fakeServerWithClock = require("../lib/sinon/util/fake_server_with_clock");
 var fakeServer = require("../lib/sinon/util/fake_server");
 var sinonSandbox = require("../lib/sinon/sandbox");
 var sinonCollection = require("../lib/sinon/collection");
-var createInstance = require("../lib/sinon/util/core/create");
 var sinonSpy = require("../lib/sinon/spy");
 var sinonStub = require("../lib/sinon/stub");
 var sinonConfig = require("../lib/sinon/util/core/get-config");
@@ -56,9 +56,25 @@ describe("sinonSandbox", function () {
         assert.same(sandbox.assert, sinonAssert);
     });
 
+    it("can be reset without failing when pre-configured to use a fake server", function () {
+        var sandbox = sinonSandbox.create({useFakeServer: true});
+        refute.exception(function () {
+            sandbox.reset();
+        });
+    });
+
+    it("can be reset without failing when configured to use a fake server", function () {
+        var sandbox = sinonSandbox.create();
+        sandbox.useFakeServer();
+        refute.exception(function () {
+            sandbox.reset();
+        });
+    });
+
+
     describe(".useFakeTimers", function () {
         beforeEach(function () {
-            this.sandbox = createInstance(sinonSandbox);
+            this.sandbox = Object.create(sinonSandbox);
         });
 
         afterEach(function () {
@@ -109,12 +125,110 @@ describe("sinonSandbox", function () {
         });
     });
 
+    describe(".usingPromise", function () {
+        beforeEach(function () {
+            this.sandbox = Object.create(sinonSandbox);
+        });
+
+        afterEach(function () {
+            this.sandbox.restore();
+        });
+
+        it("must be a function", function () {
+
+            assert.isFunction(this.sandbox.usingPromise);
+        });
+
+        it("must return the sandbox", function () {
+            var mockPromise = {};
+
+            var actual = this.sandbox.usingPromise(mockPromise);
+
+            assert.same(actual, this.sandbox);
+        });
+
+        it("must set all stubs created from sandbox with mockPromise", function () {
+
+            var resolveValue = {};
+            var mockPromise = {
+                resolve: sinonStub.create().resolves(resolveValue)
+            };
+
+            this.sandbox.usingPromise(mockPromise);
+            var stub = this.sandbox.stub().resolves();
+
+            return stub()
+                .then(function (action) {
+
+                    assert.same(resolveValue, action);
+                    assert(mockPromise.resolve.calledOnce);
+                });
+        });
+
+        // eslint-disable-next-line mocha/no-identical-title
+        it("must set all stubs created from sandbox with mockPromise", function () {
+
+            var resolveValue = {};
+            var mockPromise = {
+                resolve: sinonStub.create().resolves(resolveValue)
+            };
+            var stubbedObject = {
+                stubbedMethod: function () {
+                    return;
+                }
+            };
+
+            this.sandbox.usingPromise(mockPromise);
+            this.sandbox.stub(stubbedObject);
+            stubbedObject.stubbedMethod.resolves({});
+
+            return stubbedObject.stubbedMethod()
+                .then(function (action) {
+
+                    assert.same(resolveValue, action);
+                    assert(mockPromise.resolve.calledOnce);
+                });
+        });
+    });
+
     // These were not run in browsers before, as we were only testing in node
     if (typeof window !== "undefined") {
         describe("fake XHR/server", function () {
+            describe(".useFakeXMLHttpRequest", function () {
+                beforeEach(function () {
+                    this.sandbox = sinonSandbox.create();
+                });
+
+                afterEach(function () {
+                    this.sandbox.restore();
+                });
+
+                it("calls sinon.useFakeXMLHttpRequest", function () {
+                    this.sandbox.stub(fakeXhr, "useFakeXMLHttpRequest").returns({ restore: function () {} });
+                    this.sandbox.useFakeXMLHttpRequest();
+
+                    assert(fakeXhr.useFakeXMLHttpRequest.called);
+                });
+
+                it("doesn't secretly use useFakeServer", function () {
+                    this.sandbox.stub(fakeServer, "create").returns({ restore: function () {} });
+                    this.sandbox.useFakeXMLHttpRequest();
+
+                    assert(fakeServer.create.notCalled);
+                });
+
+                it("adds fake xhr to fake collection", function () {
+                    this.sandbox.useFakeXMLHttpRequest();
+                    this.sandbox.restore();
+
+                    assert.same(global.XMLHttpRequest, globalXHR);
+                    assert.same(global.ActiveXObject, globalAXO);
+                });
+            });
+
             describe(".useFakeServer", function () {
                 beforeEach(function () {
-                    this.sandbox = createInstance(sinonSandbox);
+                    this.sandbox = Object.create(sinonSandbox);
                 });
 
                 afterEach(function () {
@@ -449,6 +563,68 @@ describe("sinonSandbox", function () {
             assert.same(object.match, sinonMatch);
 
             sandbox.restore();
+        });
+    });
+
+    describe("getters and setters", function () {
+        it("allows stubbing getters", function () {
+            var object = {
+                foo: "bar"
+            };
+
+            var sandbox = sinonSandbox.create();
+            sandbox.stub(object, "foo").get(function () {
+                return "baz";
+            });
+
+            assert.equals(object.foo, "baz");
+        });
+
+        it("allows restoring getters", function () {
+            var object = {
+                foo: "bar"
+            };
+
+            var sandbox = sinonSandbox.create();
+            sandbox.stub(object, "foo").get(function () {
+                return "baz";
+            });
+
+            sandbox.restore();
+
+            assert.equals(object.foo, "bar");
+        });
+
+        it("allows stubbing setters", function () {
+            var object = {
+                prop: "bar"
+            };
+
+            var sandbox = sinonSandbox.create();
+            sandbox.stub(object, "foo").set(function (val) {
+                object.prop = val + "bla";
+            });
+
+            object.foo = "bla";
+
+            assert.equals(object.prop, "blabla");
+        });
+
+        it("allows restoring setters", function () {
+            var object = {
+                prop: "bar"
+            };
+
+            var sandbox = sinonSandbox.create();
+            sandbox.stub(object, "prop").set(function setterFn(val) {
+                object.prop = val + "bla";
+            });
+
+            sandbox.restore();
+
+            object.prop = "bla";
+
+            assert.equals(object.prop, "bla");
         });
     });
 });

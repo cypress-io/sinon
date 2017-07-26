@@ -1,6 +1,6 @@
 ---
 layout: page
-title: Spies
+title: Spies - Sinon.JS
 ---
 
 ## Introduction
@@ -154,7 +154,7 @@ first call. There are two ways of achieving this:
 ```
 
 The first example uses the two-dimensional `args` array directly on the spy,
-while the second example fetches the first call object and then accesses it's
+while the second example fetches the first call object and then accesses its
 `args` array. Which one to use is a matter of preference, but the recommended
 approach is going with `spy.calledWith(arg1, arg2, ...)` unless there's a need
 to make the tests highly specific.
@@ -319,7 +319,7 @@ This behaves the same as `spy.neverCalledWith(sinon.match(arg1), sinon.match(arg
 Returns `true` if spy threw an exception at least once.
 
 
-#### `spy.threw(\"TypeError\");`
+#### `spy.threw("TypeError");`
 
 Returns `true` if spy threw an exception of the provided type at least once.
 
@@ -334,7 +334,7 @@ Returns `true` if spy threw the provided exception object at least once.
 Returns `true` if spy always threw an exception.
 
 
-#### `spy.alwaysThrew(\"TypeError\");`
+#### `spy.alwaysThrew("TypeError");`
 
 Returns `true` if spy always threw an exception of the provided type.
 
@@ -371,6 +371,11 @@ assertEquals("/stuffs", spyCall.args[0]);
 ```
 
 
+#### `var spyCalls = spy.getCalls();`
+
+Returns an `Array` of all [calls](#spycall) recorded by the spy.
+
+
 #### `spy.thisValues`
 
 Array of `this` objects, `spy.thisValues[0]` is the `this` object for the first call.
@@ -405,7 +410,7 @@ Resets the state of a spy.
 Replaces the spy with the original method. Only available if the spy replaced an existing method.
 
 
-#### `spy.printf(format string\", [arg1, arg2, ...])`
+#### `spy.printf("format string", [arg1, arg2, ...])`
 
 Returns the passed format string with the following replacements performed:
 
@@ -422,7 +427,7 @@ Returns the passed format string with the following replacements performed:
     <dd>a comma-delimited list of <code>this</code> values the spy was called on</dd>
 
     <dt><code>%<var>n</var></code></dt>
-    <dd>the formatted value of the <var>n</var>th argument passed to <code>printf</code> <br/>FIXME: needs example</dd>
+    <dd>the formatted value of the <var>n</var>th argument passed to <code>printf</code></dd>
 
     <dt><code>%*</code></dt>
     <dd>a comma-delimited list of the (non-format string) arguments passed to <code>printf</code></dd>
@@ -482,7 +487,7 @@ This behaves the same as `spyCall.notCalledWith(sinon.match(arg1), sinon.match(a
 Returns `true` if call threw an exception.
 
 
-#### `spyCall.threw(TypeError\");`
+#### `spyCall.threw("TypeError");`
 
 Returns `true` if call threw exception of provided type.
 

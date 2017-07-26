@@ -2,15 +2,17 @@
 
 There are several ways of contributing to Sinon.JS
 
-* Help [improve the documentation](https://github.com/sinonjs/sinon-docs) published at [the Sinon.JS website](http://sinonjs.org)
-* Help someone understand and use Sinon.JS on [the mailing list](http://groups.google.com/group/sinonjs)
+* Look into [issues tagged `help-wanted`](https://github.com/sinonjs/sinon/issues?q=is%3Aopen+is%3Aissue+label%3A%22Help+wanted%22)
+* Help [improve the documentation](https://github.com/sinonjs/sinon/tree/master/docs) published
+  at [the Sinon.JS website](http://sinonjs.org). [Documentation issues](https://github.com/sinonjs/sinon/issues?q=is%3Aopen+is%3Aissue+label%3ADocumentation).
+* Help someone understand and use Sinon.JS on [the mailing list](http://groups.google.com/group/sinonjs) or on [Stack Overflow](https://stackoverflow.com/questions/tagged/sinon)
 * Report an issue, please read instructions below
 * Help with triaging the [issues](http://github.com/cjohansen/Sinon.JS/issues). The clearer they are, the more likely they are to be fixed soon.
 * Contribute to the code base.
 
 ## Reporting an issue
 
-To save everyone time and make it much more likely for your issue to be understood, worked on and resolved quickly, it would help if you're mindful of [How to Report Bugs Effectively](http://www.chiark.greenend.org.uk/~sgtatham/bugs.html) when pressing the "Submit new issue" button. 
+To save everyone time and make it much more likely for your issue to be understood, worked on and resolved quickly, it would help if you're mindful of [How to Report Bugs Effectively](http://www.chiark.greenend.org.uk/~sgtatham/bugs.html) when pressing the "Submit new issue" button.
 
 As a minimum, please report the following:
 
@@ -65,6 +67,26 @@ In order to run the tests, you'll need a [PhantomJS](http://phantomjs.org) globa
 
 The test suite runs well with both `1.9.x` and `2.0.0`
 
+### Compatibility
+
+#### ES5.1
+
+Sinon's source is written as [ES5.1][ES5] and requires no transpiler or polyfills.
+
+Sinon.JS uses feature detection to support [ES6][ES6] features, but does not rely on any of the new syntax introduced in [ES6][ES6] and remains compatible with [ES5.1][ES5] runtimes.
+
+#### Runtimes
+
+Sinon.JS aims at supporting the following runtimes:
+
+* Firefox 45+
+* Chrome 48+
+* Internet Explorer 11+
+* Edge 14+
+* Safari 9+
+* Node LTS versions
+
+
 ### Style
 
 Sinon.JS uses [ESLint](http://eslint.org) to keep consistent style. You probably want to install a plugin for your editor.
@@ -89,20 +111,24 @@ Sinon.JS uses [Mocha](https://mochajs.org/), please read those docs if you're un
 
 If you're doing more than a one line edit, you'll want to have finer control and less restarting of the Mocha
 
-To start tests in dev mode run 
+To start tests in dev mode run
 
     $ npm run test-dev
 
 Dev mode features:
- * [watching related files](https://mochajs.org/#w---watch) to restart tests once changes are made 
+ * [watching related files](https://mochajs.org/#w---watch) to restart tests once changes are made
  * using [Min reporter](https://mochajs.org/#min), which cleans the console each time tests run, so test results are always on top
 
 Note that in dev mode tests run only in Node. Before creating your PR please ensure tests are passing in Phantom and WebWorker as well. To check this please use [Run the tests](#run-the-tests) instructions.
 
 ### Compiling a built version
 
-Build requires [Ruby](https://www.ruby-lang.org/en/). Under the hood [Browserify](http://browserify.org/) is used.
+Build requires Node. Under the hood [Browserify](http://browserify.org/) is used.
 
 To build simply run
 
-    $ ./build
+    $ node build.js
+
+
+[ES5]: http://www.ecma-international.org/ecma-262/5.1/
+[ES6]: http://www.ecma-international.org/ecma-262/6.0/

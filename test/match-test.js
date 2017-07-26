@@ -123,6 +123,12 @@ describe("sinonMatch", function () {
         assert.isFalse(match.test({ arr: ["a", "b"] }));
     });
 
+    it("returns false if array is not equal (even if the contents would match (deep equal))", function () {
+        var match = sinonMatch([{ str: "sinon" }]);
+
+        assert.isFalse(match.test([{ str: "sinon", ignored: "value" }]));
+    });
+
     it("returns true if number objects are equal", function () {
         /*eslint-disable no-new-wrappers*/
         var match = sinonMatch({ one: new Number(1) });
@@ -547,6 +553,16 @@ describe("sinonMatch", function () {
                 var has = sinonMatch.has("prop", symbol);
 
                 assert(has.test({ prop: symbol }));
+            }
+        });
+
+        it("returns true if embedded object has Symbol", function () {
+            if (typeof Symbol === "function") {
+                var symbol = Symbol();
+
+                var has = sinonMatch.has("prop", sinonMatch.has("embedded", symbol));
+
+                assert(has.test({ prop: { embedded: symbol }, ignored: 42 }));
             }
         });
     });
@@ -1057,6 +1073,20 @@ describe("sinonMatch", function () {
 
             assert.isFalse(falsyAndUndefined.test(false));
             assert(falsyAndUndefined.test(undefined));
+        });
+    });
+
+    describe("nested", function () {
+        it("returns true for an object with nested matcher", function () {
+            var match = sinonMatch({outer: sinonMatch({ inner: "sinon" })});
+
+            assert.isTrue(match.test({outer: { inner: "sinon", foo: "bar" }}));
+        });
+
+        it("returns true for an array of nested matchers", function () {
+            var match = sinonMatch([sinonMatch({ str: "sinon" })]);
+
+            assert.isTrue(match.test([{ str: "sinon", foo: "bar" }]));
         });
     });
 });

@@ -1,6 +1,6 @@
 ---
 layout: page
-title: Assertions
+title: Assertions - Sinon.JS
 ---
 
 Sinon.JS ships with a set of assertions that mirror most behavior verification methods and properties on spies and stubs. The advantage of using the assertions is that failed expectations on stubs and spies can be expressed directly as assertion failures with detailed and helpful error messages.
@@ -148,7 +148,7 @@ Like above, only required for all calls to the spy.
 
 #### `sinon.assert.match(actual, expectation);`
 
-Uses [`sinon.match`](./matchers.md) to test if the arguments can be considered a match.
+Uses [`sinon.match`](../matchers) to test if the arguments can be considered a match.
 
 ```javascript
 var sinon = require('sinon');

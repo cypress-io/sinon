@@ -2,14 +2,14 @@
 
 var referee = require("referee");
 var sinonCollection = require("../lib/sinon/collection");
-var createInstance = require("../lib/sinon/util/core/create");
 var sinonSpy = require("../lib/sinon/spy");
 var sinonStub = require("../lib/sinon/stub");
 var assert = referee.assert;
+var deprecated = require("../lib/sinon/util/core/deprecated");
 
 describe("collection", function () {
     it("creates fake collection", function () {
-        var collection = createInstance(sinonCollection);
+        var collection = Object.create(sinonCollection);
 
         assert.isFunction(collection.verify);
         assert.isFunction(collection.restore);
@@ -20,31 +20,34 @@ describe("collection", function () {
 
     describe(".stub", function () {
         beforeEach(function () {
-            this.collection = createInstance(sinonCollection);
+            this.collection = Object.create(sinonCollection);
         });
 
         it("fails if stubbing property on null", function () {
-            var error;
+            var collection = this.collection;
 
-            try {
-                this.collection.stub(null, "prop");
-            } catch (e) {
-                error = e;
-            }
-
-            assert.equals(error.message, "Trying to stub property 'prop' of null");
+            assert.exception(
+                function () {
+                    collection.stub(null, "prop");
+                },
+                {
+                    message: "Trying to stub property 'prop' of null"
+                }
+            );
         });
 
         it("fails if stubbing symbol on null", function () {
             if (typeof Symbol === "function") {
-                var error;
+                var collection = this.collection;
 
-                try {
-                    this.collection.stub(null, Symbol());
-                } catch (e) {
-                    error = e;
-                }
-                assert.equals(error.message, "Trying to stub property 'Symbol()' of null");
+                assert.exception(
+                    function () {
+                        collection.stub(null, Symbol());
+                    },
+                    {
+                        message: "Trying to stub property 'Symbol()' of null"
+                    }
+                );
             }
         });
 
@@ -107,8 +110,13 @@ describe("collection", function () {
                 });
 
                 it("stubs environment property", function () {
+                    var originalPrintWarning = deprecated.printWarning;
+                    deprecated.printWarning = function () {};
+
                     this.collection.stub(process.env, "HELL", "froze over");
                     assert.equals(process.env.HELL, "froze over");
+
+                    deprecated.printWarning = originalPrintWarning;
                 });
             });
         }
@@ -117,29 +125,44 @@ describe("collection", function () {
     describe("stub anything", function () {
         beforeEach(function () {
             this.object = { property: 42 };
-            this.collection = createInstance(sinonCollection);
+            this.collection = Object.create(sinonCollection);
         });
 
         it("stubs number property", function () {
+            var originalPrintWarning = deprecated.printWarning;
+            deprecated.printWarning = function () {};
+
             this.collection.stub(this.object, "property", 1);
 
             assert.equals(this.object.property, 1);
+
+            deprecated.printWarning = originalPrintWarning;
         });
 
         it("restores number property", function () {
+            var originalPrintWarning = deprecated.printWarning;
+            deprecated.printWarning = function () {};
+
             this.collection.stub(this.object, "property", 1);
             this.collection.restore();
 
             assert.equals(this.object.property, 42);
+
+            deprecated.printWarning = originalPrintWarning;
         });
 
         it("fails if property does not exist", function () {
+            var originalPrintWarning = deprecated.printWarning;
+            deprecated.printWarning = function () {};
+
             var collection = this.collection;
             var object = {};
 
             assert.exception(function () {
                 collection.stub(object, "prop", 1);
             });
+
+            deprecated.printWarning = originalPrintWarning;
         });
 
         it("fails if Symbol does not exist", function () {
@@ -147,18 +170,23 @@ describe("collection", function () {
                 var collection = this.collection;
                 var object = {};
 
+                var originalPrintWarning = deprecated.printWarning;
+                deprecated.printWarning = function () {};
+
                 assert.exception(function () {
                     collection.stub(object, Symbol(), 1);
                 }, function (err) {
                     return err.message === "Cannot stub non-existent own property Symbol()";
                 });
+
+                deprecated.printWarning = originalPrintWarning;
             }
         });
     });
 
     describe(".mock", function () {
         beforeEach(function () {
-            this.collection = createInstance(sinonCollection);
+            this.collection = Object.create(sinonCollection);
         });
 
         it("returns a mock", function () {
@@ -189,7 +217,7 @@ describe("collection", function () {
 
     describe("stub and mock test", function () {
         beforeEach(function () {
-            this.collection = createInstance(sinonCollection);
+            this.collection = Object.create(sinonCollection);
         });
 
         it("appends mocks and stubs to fake array", function () {
@@ -202,7 +230,7 @@ describe("collection", function () {
 
     describe(".verify", function () {
         beforeEach(function () {
-            this.collection = createInstance(sinonCollection);
+            this.collection = Object.create(sinonCollection);
         });
 
         it("calls verify on all fakes", function () {
@@ -221,7 +249,7 @@ describe("collection", function () {
 
     describe(".restore", function () {
         beforeEach(function () {
-            this.collection = createInstance(sinonCollection);
+            this.collection = Object.create(sinonCollection);
             this.collection.fakes = [{
                 restore: sinonSpy()
             }, {
@@ -259,7 +287,7 @@ describe("collection", function () {
 
     describe("verify and restore", function () {
         beforeEach(function () {
-            this.collection = createInstance(sinonCollection);
+            this.collection = Object.create(sinonCollection);
         });
 
         it("calls verify and restore", function () {
@@ -282,21 +310,22 @@ describe("collection", function () {
         });
 
         it("calls restore when restore throws", function () {
-            this.collection.verify = sinonSpy();
-            this.collection.restore = sinonStub().throws();
+            var collection = this.collection;
 
-            try {
-                this.collection.verifyAndRestore();
-            }
-            catch (e) {} // eslint-disable-line no-empty
+            collection.verify = sinonSpy();
+            collection.restore = sinonStub().throws();
 
-            assert(this.collection.restore.called);
+            assert.exception(function () {
+                collection.verifyAndRestore();
+            });
+
+            assert(collection.restore.called);
         });
     });
 
     describe(".reset", function () {
         beforeEach(function () {
-            this.collection = createInstance(sinonCollection);
+            this.collection = Object.create(sinonCollection);
             this.collection.fakes = [{
                 reset: sinonSpy()
             }, {
@@ -317,7 +346,7 @@ describe("collection", function () {
 
     describe(".resetBehavior", function () {
         beforeEach(function () {
-            this.collection = createInstance(sinonCollection);
+            this.collection = Object.create(sinonCollection);
             this.collection.fakes = [{
                 resetBehavior: sinonSpy()
             }, {
@@ -338,28 +367,36 @@ describe("collection", function () {
 
     describe(".resetHistory", function () {
         beforeEach(function () {
-            this.collection = createInstance(sinonCollection);
+            this.collection = Object.create(sinonCollection);
             this.collection.fakes = [{
+                // this fake has a resetHistory method
                 resetHistory: sinonSpy()
             }, {
+                // this fake has a resetHistory method
                 resetHistory: sinonSpy()
+            }, {
+                // this fake pretends to be a spy, which does not have resetHistory method
+                // but has a reset method
+                reset: sinonSpy()
             }];
         });
 
-        it("calls resetHistory on all fakes", function () {
+        it("resets the history on all fakes", function () {
             var fake0 = this.collection.fakes[0];
             var fake1 = this.collection.fakes[1];
+            var fake2 = this.collection.fakes[2];
 
             this.collection.resetHistory();
 
             assert(fake0.resetHistory.called);
             assert(fake1.resetHistory.called);
+            assert(fake2.reset.called);
         });
     });
 
     describe("inject test", function () {
         beforeEach(function () {
-            this.collection = createInstance(sinonCollection);
+            this.collection = Object.create(sinonCollection);
         });
 
         it("injects fakes into object", function () {

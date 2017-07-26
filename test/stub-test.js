@@ -5,14 +5,24 @@ var createStub = require("../lib/sinon/stub");
 var createStubInstance = require("../lib/sinon/stub").createStubInstance;
 var createSpy = require("../lib/sinon/spy");
 var sinonMatch = require("../lib/sinon/match");
-var createInstance = require("../lib/sinon/util/core/create");
+var getPropertyDescriptor = require("../lib/sinon/util/core/get-property-descriptor");
+var deprecated = require("../lib/sinon/util/core/deprecated");
 var assert = referee.assert;
 var refute = referee.refute;
 var fail = referee.fail;
 var Promise = require("native-promise-only"); // eslint-disable-line no-unused-vars
-var deprecated = require("../lib/sinon/util/core/deprecated");
 
 describe("stub", function () {
+    beforeEach(function () {
+        createStub(deprecated, "printWarning");
+    });
+
+    afterEach(function () {
+        if (deprecated.printWarning.restore) {
+            deprecated.printWarning.restore();
+        }
+    });
+
     it("is spy", function () {
         var stub = createStub.create();
 
@@ -22,45 +32,42 @@ describe("stub", function () {
     });
 
     it("fails if stubbing property on null", function () {
-        var error;
-
-        try {
-            createStub(null, "prop");
-        } catch (e) {
-            error = e;
-        }
-
-        assert.equals(error.message, "Trying to stub property 'prop' of null");
+        assert.exception(
+            function () {
+                createStub(null, "prop");
+            },
+            {
+                message: "Trying to stub property 'prop' of null"
+            }
+        );
     });
 
     it("fails if called with an empty property descriptor", function () {
-        var originalPrintWarning = deprecated.printWarning;
-        var error;
         var propertyKey = "ea762c6d-16ab-4ded-8bc2-3bc6f2de2925";
         var object = {};
 
         object[propertyKey] = "257b38d8-3c02-4353-82ab-b1b588be6990";
 
-        deprecated.printWarning = function () {};
-
-        try {
-            createStub(object, propertyKey, {});
-        } catch (e) {
-            error = e;
-        }
-
-        assert.equals(error.message, "Expected property descriptor to have at least one key");
-
-        deprecated.printWarning = originalPrintWarning;
+        assert.exception(
+            function () {
+                createStub(object, propertyKey, {});
+            },
+            {
+                message: "Expected property descriptor to have at least one key"
+            }
+        );
     });
 
     it("throws a readable error if stubbing Symbol on null", function () {
         if (typeof Symbol === "function") {
-            try {
-                createStub(null, Symbol());
-            } catch (err) {
-                assert.equals(err.message, "Trying to stub property 'Symbol()' of null");
-            }
+            assert.exception(
+                function () {
+                    createStub(null, Symbol());
+                },
+                {
+                    message: "Trying to stub property 'Symbol()' of null"
+                }
+            );
         }
     });
 
@@ -93,6 +100,28 @@ describe("stub", function () {
         stub(1, callback);
 
         assert(callback.called);
+    });
+
+    it("should works with combination of withArgs arguments", function () {
+        var stub = createStub();
+        stub.returns(0);
+        stub.withArgs(1, 1).returns(2);
+        stub.withArgs(1).returns(1);
+
+        assert.equals(stub(), 0);
+        assert.equals(stub(1), 1);
+        assert.equals(stub(1, 1), 2);
+        assert.equals(stub(1, 1, 1), 2);
+        assert.equals(stub(2), 0);
+    });
+
+    it("should work with combination of withArgs arguments", function () {
+        var stub = createStub();
+
+        stub.withArgs(1).returns(42);
+        stub(1);
+
+        refute.isNull(stub.withArgs(1).firstCall);
     });
 
     describe(".returns", function () {
@@ -280,6 +309,84 @@ describe("stub", function () {
         });
     });
 
+    describe(".throwsArg", function () {
+        it("throws argument at specified index", function () {
+            var stub = createStub.create();
+            stub.throwsArg(0);
+            var expectedError = new Error("The expected error message");
+
+            assert.exception(function () {
+                stub(expectedError);
+            }, function (err) {
+                return err.message === expectedError.message;
+            });
+        });
+
+        it("returns stub", function () {
+            var stub = createStub.create();
+
+            assert.same(stub.throwsArg(0), stub);
+        });
+
+        it("throws TypeError if no index is specified", function () {
+            var stub = createStub.create();
+
+            assert.exception(function () {
+                stub.throwsArg();
+            }, "TypeError");
+        });
+
+        it("should throw without enough arguments", function () {
+            var stub = createStub.create();
+            stub.throwsArg(3);
+
+            assert.exception(
+                function () {
+                    stub("only", "two arguments");
+                },
+                function (error) {
+                    return error instanceof TypeError
+                        && error.message ===
+                        "throwArgs failed: 3 arguments required but only 2 present"
+                    ;
+                }
+            );
+
+        });
+
+        it("should work with call-based behavior", function () {
+            var stub = createStub.create();
+            var expectedError = new Error("catpants");
+
+            stub.returns(1);
+            stub.onSecondCall().throwsArg(1);
+
+            refute.exception(function () {
+                assert.equals(1, stub(null, expectedError));
+            });
+
+            assert.exception(
+                function () {
+                    stub(null, expectedError);
+                },
+                function (error) {
+                    return error.message === expectedError.message;
+                }
+            );
+        });
+
+        it("should be reset by .resetBeahvior", function () {
+            var stub = createStub.create();
+
+            stub.throwsArg(0);
+            stub.resetBehavior();
+
+            refute.exception(function () {
+                stub(new Error("catpants"));
+            });
+        });
+    });
+
     describe(".returnsThis", function () {
         it("stub returns this", function () {
             var instance = {};
@@ -318,18 +425,66 @@ describe("stub", function () {
         });
     });
 
+    describe(".usingPromise", function () {
+        it("should exist and be a function", function () {
+            var stub = createStub.create();
+
+            assert(stub.usingPromise);
+            assert.isFunction(stub.usingPromise);
+        });
+
+        it("should return the current stub", function () {
+            var stub = createStub.create();
+
+            assert.same(stub.usingPromise(Promise), stub);
+        });
+
+        it("should set the promise used by resolve", function () {
+            var stub = createStub.create();
+            var promise = {
+                resolve: createStub.create().callsFake(function (value) {
+                    return Promise.resolve(value);
+                })
+            };
+            var object = {};
+
+            stub.usingPromise(promise).resolves(object);
+
+            return stub().then(function (actual) {
+                assert.same(actual, object, "Same object resolved");
+                assert.isTrue(promise.resolve.calledOnce, "Custom promise resolve called once");
+                assert.isTrue(promise.resolve.calledWith(object), "Custom promise resolve called once with expected");
+            });
+        });
+
+        it("should set the promise used by reject", function () {
+            var stub = createStub.create();
+            var promise = {
+                reject: createStub.create().callsFake(function (err) {
+                    return Promise.reject(err);
+                })
+            };
+            var reason = new Error();
+
+            stub.usingPromise(promise).rejects(reason);
+
+            return stub().then(function () {
+                referee.fail("this should not resolve");
+            }).catch(function (actual) {
+                assert.same(actual, reason, "Same object resolved");
+                assert.isTrue(promise.reject.calledOnce, "Custom promise reject called once");
+                assert.isTrue(promise.reject.calledWith(reason), "Custom promise reject called once with expected");
+            });
+        });
+    });
+
     describe(".throws", function () {
         it("throws specified exception", function () {
             var stub = createStub.create();
             var error = new Error();
             stub.throws(error);
 
-            try {
-                stub();
-                fail("Expected stub to throw");
-            } catch (e) {
-                assert.same(e, error);
-            }
+            assert.exception(stub, error);
         });
 
         it("returns stub", function () {
@@ -353,44 +508,34 @@ describe("stub", function () {
             var message = "Oh no!";
             stub.throws("Error", message);
 
-            try {
-                stub();
-                referee.fail("Expected stub to throw");
-            } catch (e) {
-                assert.equals(e.message, message);
-            }
+            assert.exception(stub, {
+                message: message
+            });
         });
 
         it("does not specify exception message if not provided", function () {
             var stub = createStub.create();
             stub.throws("Error");
 
-            try {
-                stub();
-                referee.fail("Expected stub to throw");
-            } catch (e) {
-                assert.equals(e.message, "");
-            }
+            assert.exception(stub, {
+                message: ""
+            });
         });
 
         it("throws generic error", function () {
             var stub = createStub.create();
             stub.throws();
 
-            assert.exception(function () {
-                stub();
-            }, "Error");
+            assert.exception(stub, "Error");
         });
 
         it("resets 'invoking' flag", function () {
             var stub = createStub.create();
             stub.throws();
 
-            try {
-                stub();
-            } catch (e) {
-                refute.defined(stub.invoking);
-            }
+            assert.exception(stub);
+
+            refute.defined(stub.invoking);
         });
     });
 
@@ -711,37 +856,9 @@ describe("stub", function () {
             }
         });
 
-        it.skip("returns function from wrapMethod", function () {
-            /*
-            var wrapper = function () {};
-            sinon.wrapMethod = function () {
-                return wrapper;
-            };
-
-            var result = createStub(this.object, "method");
-
-            assert.same(result, wrapper);
-            */
-        });
-
-        it.skip("passes object and method to wrapMethod", function () {
-            /*
-            var wrapper = function () {};
-            var args;
-
-            sinon.wrapMethod = function () {
-                args = arguments;
-                return wrapper;
-            };
-
-            createStub(this.object, "method");
-
-            assert.same(args[0], this.object);
-            assert.same(args[1], "method");
-            */
-        });
-
         it("warns provided function as stub, recommending callsFake instead", function () {
+            deprecated.printWarning.restore();
+
             var called = false;
             var infoStub = createStub(console, "info");
             var stub = createStub(this.object, "method", function () {
@@ -755,16 +872,11 @@ describe("stub", function () {
         });
 
         it("throws if third argument is provided but not a proprety descriptor", function () {
-            var originalPrintWarning = deprecated.printWarning;
             var object = this.object;
-
-            deprecated.printWarning = function () {};
 
             assert.exception(function () {
                 createStub(object, "method", 1);
             }, "TypeError");
-
-            deprecated.printWarning = originalPrintWarning;
         });
 
         it("stubbed method should be proper stub", function () {
@@ -786,10 +898,7 @@ describe("stub", function () {
             var stub = createStub(this.object, "method");
             stub.throws("TypeError");
 
-            try {
-                this.object.method();
-            }
-            catch (e) {} // eslint-disable-line no-empty
+            assert.exception(this.object.method);
 
             assert(stub.threw("TypeError"));
         });
@@ -799,16 +908,6 @@ describe("stub", function () {
 
             assert.isFunction(stub);
             assert.isFalse(stub.called);
-        });
-
-        it("throws if property is not a function", function () {
-            var obj = { someProp: 42 };
-
-            assert.exception(function () {
-                createStub(obj, "someProp");
-            });
-
-            assert.equals(obj.someProp, 42);
         });
 
         it("successfully stubs falsey properties", function () {
@@ -914,7 +1013,7 @@ describe("stub", function () {
             var parent = {
                 func: function () {}
             };
-            var child = createInstance(parent);
+            var child = Object.create(parent);
             child.func = function () {};
 
             refute.exception(function () {
@@ -923,10 +1022,6 @@ describe("stub", function () {
         });
 
         it("does not call getter during restore", function () {
-            var originalPrintWarning = deprecated.printWarning;
-
-            deprecated.printWarning = function () {};
-
             var obj = {
                 get prop() {
                     fail("should not call getter");
@@ -939,21 +1034,10 @@ describe("stub", function () {
             assert.equals(obj.prop, 43);
 
             stub.restore();
-            deprecated.printWarning = originalPrintWarning;
         });
     });
 
     describe("stubbed function", function () {
-        it("throws if stubbing non-existent property", function () {
-            var myObj = {};
-
-            assert.exception(function () {
-                createStub(myObj, "ouch");
-            });
-
-            refute.defined(myObj.ouch);
-        });
-
         it("has toString method", function () {
             var obj = { meth: function () {} };
             createStub(obj, "meth");
@@ -989,25 +1073,24 @@ describe("stub", function () {
         it("throws understandable error if no callback is passed", function () {
             var stub = createStub().yields();
 
-            try {
-                stub();
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "stub expected to yield, but no callback was passed.");
-            }
+            assert.exception(stub, {
+                message: "stub expected to yield, but no callback was passed."
+            });
         });
 
         it("includes stub name and actual arguments in error", function () {
             var myObj = { somethingAwesome: function () {} };
             var stub = createStub(myObj, "somethingAwesome").yields();
 
-            try {
-                stub(23, 42);
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "somethingAwesome expected to yield, but no callback " +
-                              "was passed. Received [23, 42]");
-            }
+            assert.exception(
+                function () {
+                    stub(23, 42);
+                },
+                {
+                    message: "somethingAwesome expected to yield, but no callback " +
+                            "was passed. Received [23, 42]"
+                }
+            );
         });
 
         it("invokes last argument as callback", function () {
@@ -1094,25 +1177,24 @@ describe("stub", function () {
         it("throws understandable error if no callback is passed", function () {
             var stub = createStub().yieldsRight();
 
-            try {
-                stub();
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "stub expected to yield, but no callback was passed.");
-            }
+            assert.exception(stub, {
+                message: "stub expected to yield, but no callback was passed."
+            });
         });
 
         it("includes stub name and actual arguments in error", function () {
             var myObj = { somethingAwesome: function () {} };
             var stub = createStub(myObj, "somethingAwesome").yieldsRight();
 
-            try {
-                stub(23, 42);
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "somethingAwesome expected to yield, but no callback " +
-                "was passed. Received [23, 42]");
-            }
+            assert.exception(
+                function () {
+                    stub(23, 42);
+                },
+                {
+                    message: "somethingAwesome expected to yield, but no callback " +
+                             "was passed. Received [23, 42]"
+                }
+            );
         });
 
         it("invokes last argument as callback", function () {
@@ -1212,25 +1294,24 @@ describe("stub", function () {
         it("throws understandable error if no callback is passed", function () {
             this.stub.yieldsOn(this.fakeContext);
 
-            try {
-                this.stub();
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "stub expected to yield, but no callback was passed.");
-            }
+            assert.exception(this.stub, {
+                message: "stub expected to yield, but no callback was passed."
+            });
         });
 
         it("includes stub name and actual arguments in error", function () {
             var myObj = { somethingAwesome: function () {} };
             var stub = createStub(myObj, "somethingAwesome").yieldsOn(this.fakeContext);
 
-            try {
-                stub(23, 42);
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "somethingAwesome expected to yield, but no callback " +
-                              "was passed. Received [23, 42]");
-            }
+            assert.exception(
+                function () {
+                    stub(23, 42);
+                },
+                {
+                    message: "somethingAwesome expected to yield, but no callback " +
+                             "was passed. Received [23, 42]"
+                }
+            );
         });
 
         it("invokes last argument as callback", function () {
@@ -1293,13 +1374,10 @@ describe("stub", function () {
         it("throws understandable error if no object with callback is passed", function () {
             var stub = createStub().yieldsTo("success");
 
-            try {
-                stub();
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "stub expected to yield to 'success', but no object " +
-                              "with such a property was passed.");
-            }
+            assert.exception(stub, {
+                message: "stub expected to yield to 'success', but no object " +
+                         "with such a property was passed."
+            });
         });
 
         it("throws understandable error if failing to yield callback by symbol", function () {
@@ -1308,11 +1386,9 @@ describe("stub", function () {
 
                 var stub = createStub().yieldsTo(symbol);
 
-                assert.exception(function () {
-                    stub();
-                }, function (err) {
-                    return err.message === "stub expected to yield to 'Symbol()', but no object with " +
-                                           "such a property was passed.";
+                assert.exception(stub, {
+                    message: "stub expected to yield to 'Symbol()', but no object with " +
+                             "such a property was passed."
                 });
             }
         });
@@ -1321,14 +1397,16 @@ describe("stub", function () {
             var myObj = { somethingAwesome: function () {} };
             var stub = createStub(myObj, "somethingAwesome").yieldsTo("success");
 
-            try {
-                stub(23, 42);
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "somethingAwesome expected to yield to 'success', but " +
-                              "no object with such a property was passed. " +
-                              "Received [23, 42]");
-            }
+            assert.exception(
+                function () {
+                    stub(23, 42);
+                },
+                {
+                    message: "somethingAwesome expected to yield to 'success', but " +
+                             "no object with such a property was passed. " +
+                             "Received [23, 42]"
+                }
+            );
         });
 
         it("invokes property on last argument as callback", function () {
@@ -1412,27 +1490,26 @@ describe("stub", function () {
         it("throws understandable error if no object with callback is passed", function () {
             this.stub.yieldsToOn("success", this.fakeContext);
 
-            try {
-                this.stub();
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "stub expected to yield to 'success', but no object " +
-                              "with such a property was passed.");
-            }
+            assert.exception(this.stub, {
+                message: "stub expected to yield to 'success', but no object " +
+                         "with such a property was passed."
+            });
         });
 
         it("includes stub name and actual arguments in error", function () {
             var myObj = { somethingAwesome: function () {} };
             var stub = createStub(myObj, "somethingAwesome").yieldsToOn("success", this.fakeContext);
 
-            try {
-                stub(23, 42);
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "somethingAwesome expected to yield to 'success', but " +
-                              "no object with such a property was passed. " +
-                              "Received [23, 42]");
-            }
+            assert.exception(
+                function () {
+                    stub(23, 42);
+                },
+                {
+                    message: "somethingAwesome expected to yield to 'success', but " +
+                             "no object with such a property was passed. " +
+                             "Received [23, 42]"
+                }
+            );
         });
 
         it("invokes property on last argument as callback", function () {
@@ -1745,12 +1822,10 @@ describe("stub", function () {
             stub.onSecondCall().throwsException(error);
 
             stub();
-            try {
-                stub();
-                fail("Expected stub to throw");
-            } catch (e) {
-                assert.same(e, error);
-            }
+
+            assert.exception(stub, function (e) {
+                return e === error;
+            });
         });
 
         it("supports chained declaration of behavior", function () {
@@ -1831,11 +1906,14 @@ describe("stub", function () {
             });
 
             it("throws an understandable error when trying to use withArgs on behavior", function () {
-                try {
-                    createStub().onFirstCall().withArgs(1);
-                } catch (e) {
-                    assert.match(e.message, /not supported/);
-                }
+                assert.exception(
+                    function () {
+                        createStub().onFirstCall().withArgs(1);
+                    },
+                    {
+                        message: /not supported/
+                    }
+                );
             });
         });
 
@@ -2011,6 +2089,24 @@ describe("stub", function () {
 
             assert(stub.calledOnce);
             assert.equals(stub.getCall(0).args[0], 2);
+        });
+
+        it("doesn't reset behavior defined using withArgs", function () {
+            var stub = createStub();
+            stub.withArgs("test").returns(10);
+
+            stub.resetHistory();
+
+            assert.equals(stub("test"), 10);
+        });
+
+        it("doesn't reset behavior", function () {
+            var stub = createStub();
+            stub.returns(10);
+
+            stub.resetHistory();
+
+            assert.equals(stub("test"), 10);
         });
     });
 
@@ -2300,6 +2396,286 @@ describe("stub", function () {
             myObj.prop("not foo");
 
             assert.equals(reference, myObj);
+        });
+    });
+
+    describe(".get", function () {
+        it("allows users to stub getter functions for properties", function () {
+            var myObj = {
+                prop: "foo"
+            };
+
+            createStub(myObj, "prop").get(function getterFn() {
+                return "bar";
+            });
+
+            assert.equals(myObj.prop, "bar");
+        });
+
+        it("allows users to stub getter functions for functions", function () {
+            var myObj = {
+                prop: function propGetter() {
+                    return "foo";
+                }
+            };
+
+            createStub(myObj, "prop").get(function getterFn() {
+                return "bar";
+            });
+
+            assert.equals(myObj.prop, "bar");
+        });
+
+        it("replaces old getters", function () {
+            var myObj = {
+                get prop() {
+                    fail("should not call the old getter");
+                }
+            };
+
+            createStub(myObj, "prop").get(function getterFn() {
+                return "bar";
+            });
+
+            assert.equals(myObj.prop, "bar");
+        });
+
+        it("can set getters for non-existing properties", function () {
+            var myObj = {};
+
+            createStub(myObj, "prop").get(function getterFn() {
+                return "bar";
+            });
+
+            assert.equals(myObj.prop, "bar");
+        });
+
+        it("can restore stubbed setters for functions", function () {
+            var propFn = function propFn() {
+                return "bar";
+            };
+
+            var myObj = {
+                prop: propFn
+            };
+
+            var stub = createStub(myObj, "prop");
+
+            stub.get(function getterFn() {
+                return "baz";
+            });
+
+            stub.restore();
+
+            assert.equals(myObj.prop, propFn);
+        });
+
+        it("can restore stubbed getters for properties", function () {
+            var myObj = {
+                get prop() {
+                    return "bar";
+                }
+            };
+
+            var stub = createStub(myObj, "prop");
+
+            stub.get(function getterFn() {
+                return "baz";
+            });
+
+            stub.restore();
+
+            assert.equals(myObj.prop, "bar");
+        });
+
+        it("can restore stubbed getters for previously undefined properties", function () {
+            var myObj = {};
+
+            var stub = createStub(myObj, "nonExisting");
+
+            stub.get(function getterFn() {
+                return "baz";
+            });
+
+            stub.restore();
+
+            assert.equals(getPropertyDescriptor(myObj, "nonExisting"), undefined);
+        });
+    });
+
+    describe(".set", function () {
+        it("allows users to stub setter functions for properties", function () {
+            var myObj = {
+                prop: "foo"
+            };
+
+            createStub(myObj, "prop").set(function setterFn() {
+                myObj.example = "bar";
+            });
+
+            myObj.prop = "baz";
+
+            assert.equals(myObj.example, "bar");
+        });
+
+        it("allows users to stub setter functions for functions", function () {
+            var myObj = {
+                prop: function propSetter() {
+                    return "foo";
+                }
+            };
+
+            createStub(myObj, "prop").set(function setterFn() {
+                myObj.example = "bar";
+            });
+
+            myObj.prop = "baz";
+
+            assert.equals(myObj.example, "bar");
+        });
+
+        it("replaces old setters", function () {
+            var myObj = { // eslint-disable-line accessor-pairs
+                set prop(val) {
+                    fail("should not call the old setter");
+                }
+            };
+
+            createStub(myObj, "prop").set(function setterFn() {
+                myObj.example = "bar";
+            });
+
+            myObj.prop = "foo";
+
+            assert.equals(myObj.example, "bar");
+        });
+
+        it("can set setters for non-existing properties", function () {
+            var myObj = {};
+
+            createStub(myObj, "prop").set(function setterFn() {
+                myObj.example = "bar";
+            });
+
+            myObj.prop = "foo";
+
+            assert.equals(myObj.example, "bar");
+        });
+
+        it("can restore stubbed setters for functions", function () {
+            var propFn = function propFn() {
+                return "bar";
+            };
+
+            var myObj = {
+                prop: propFn
+            };
+
+            var stub = createStub(myObj, "prop");
+
+            stub.set(function setterFn() {
+                myObj.otherProp = "baz";
+            });
+
+            stub.restore();
+
+            assert.equals(myObj.prop, propFn);
+        });
+
+        it("can restore stubbed setters for properties", function () {
+            var myObj = { // eslint-disable-line accessor-pairs
+                set prop(val) {
+                    this.otherProp = "bar";
+                    return "bar";
+                }
+            };
+
+            var stub = createStub(myObj, "prop");
+
+            stub.set(function setterFn() {
+                myObj.otherProp = "baz";
+            });
+
+            stub.restore();
+
+            myObj.prop = "foo";
+            assert.equals(myObj.otherProp, "bar");
+        });
+
+        it("can restore stubbed setters for previously undefined properties", function () {
+            var myObj = {};
+
+            var stub = createStub(myObj, "nonExisting");
+
+            stub.set(function setterFn() {
+                myObj.otherProp = "baz";
+            });
+
+            stub.restore();
+
+            assert.equals(getPropertyDescriptor(myObj, "nonExisting"), undefined);
+        });
+    });
+
+    describe(".value", function () {
+        it("allows stubbing property descriptor values", function () {
+            var myObj = {
+                prop: "rawString"
+            };
+
+            createStub(myObj, "prop").value("newString");
+            assert.equals(myObj.prop, "newString");
+        });
+
+        it("allows restoring stubbed property descriptor values", function () {
+            var myObj = {
+                prop: "rawString"
+            };
+
+            var stub = createStub(myObj, "prop").value("newString");
+            stub.restore();
+
+            assert.equals(myObj.prop, "rawString");
+        });
+
+        it("allows restoring previously undefined properties", function () {
+            var obj = {};
+            var stub = createStub(obj, "nonExisting").value(2);
+
+            stub.restore();
+
+            assert.equals(getPropertyDescriptor(obj, "nonExisting"), undefined);
+        });
+
+        it("allows stubbing function static properties", function () {
+            var myFunc = function () {};
+            myFunc.prop = "rawString";
+
+            createStub(myFunc, "prop").value("newString");
+            assert.equals(myFunc.prop, "newString");
+        });
+
+        it("allows restoring function static properties", function () {
+            var myFunc = function () {};
+            myFunc.prop = "rawString";
+
+            var stub = createStub(myFunc, "prop").value("newString");
+            stub.restore();
+
+            assert.equals(myFunc.prop, "rawString");
+        });
+
+        it("allows stubbing object props with configurable false", function () {
+            var myObj = {};
+            Object.defineProperty(myObj, "prop", {
+                configurable: false,
+                enumerable: true,
+                writable: true,
+                value: "static"
+            });
+
+            createStub(myObj, "prop").value("newString");
+            assert.equals(myObj.prop, "newString");
         });
     });
 });

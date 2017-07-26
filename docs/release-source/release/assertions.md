@@ -1,6 +1,6 @@
 ---
 layout: page
-title: Assertions
+title: Assertions - Sinon.JS
 breadcrumb: assertions
 ---
 
@@ -149,7 +149,7 @@ Like above, only required for all calls to the spy.
 
 #### `sinon.assert.match(actual, expectation);`
 
-Uses [`sinon.match`](./matchers.md) to test if the arguments can be considered a match.
+Uses [`sinon.match`](../matchers) to test if the arguments can be considered a match.
 
 ```javascript
 var sinon = require('sinon');

@@ -3,20 +3,15 @@
 var referee = require("referee");
 var sinon = require("../../lib/sinon");
 var sinonFakeServer = require("../../lib/sinon/util/fake_server");
+var fakeXhr = require("../../lib/sinon/util/fake_xml_http_request");
 var sinonStub = require("../../lib/sinon/stub");
 var sinonSpy = require("../../lib/sinon/spy");
 var sinonSandbox = require("../../lib/sinon/sandbox");
 var fakeTimers = require("../../lib/sinon/util/fake_timers");
-var fakeXhr = require("../../lib/sinon/util/fake_xml_http_request").xhr;
-var FakeXMLHttpRequest = require("../../lib/sinon/util/fake_xml_http_request").FakeXMLHttpRequest;
-var FakeXDomainRequest = require("../../lib/sinon/util/fake_xdomain_request").FakeXDomainRequest;
+var FakeXMLHttpRequest = fakeXhr.FakeXMLHttpRequest;
 
 var assert = referee.assert;
 var refute = referee.refute;
-
-// we need better ways to test both paths
-// but at least running tests in different environments will do that
-var FakeXHR = fakeXhr.supportsCORS ? FakeXMLHttpRequest : FakeXDomainRequest;
 
 if (typeof window !== "undefined") {
     describe("sinonFakeServer", function () {
@@ -96,13 +91,13 @@ if (typeof window !== "undefined") {
 
         it("fakes XMLHttpRequest", function () {
             var sandbox = sinonSandbox.create();
-            sandbox.stub(sinon, "useFakeXMLHttpRequest").returns({
+            sandbox.stub(fakeXhr, "useFakeXMLHttpRequest").returns({
                 restore: sinonStub()
             });
 
             this.server = sinonFakeServer.create();
 
-            assert(sinon.useFakeXMLHttpRequest.called);
+            assert(fakeXhr.useFakeXMLHttpRequest.called);
             sandbox.restore();
         });
 
@@ -126,27 +121,27 @@ if (typeof window !== "undefined") {
             });
 
             it("collects objects created with fake XHR", function () {
-                var xhrs = [new FakeXHR(), new FakeXHR()];
+                var xhrs = [new FakeXMLHttpRequest(), new FakeXMLHttpRequest()];
 
                 assert.equals(this.server.requests, xhrs);
             });
 
             it("collects xhr objects through addRequest", function () {
                 this.server.addRequest = sinonSpy();
-                var xhr = new FakeXHR();
+                var xhr = new FakeXMLHttpRequest();
 
                 assert(this.server.addRequest.calledWith(xhr));
             });
 
             it("observes onSend on requests", function () {
-                var xhrs = [new FakeXHR(), new FakeXHR()];
+                var xhrs = [new FakeXMLHttpRequest(), new FakeXMLHttpRequest()];
 
                 assert.isFunction(xhrs[0].onSend);
                 assert.isFunction(xhrs[1].onSend);
             });
 
             it("onSend should call handleRequest with request object", function () {
-                var xhr = new FakeXHR();
+                var xhr = new FakeXMLHttpRequest();
                 xhr.open("GET", "/");
                 sinonSpy(this.server, "handleRequest");
 
@@ -167,7 +162,7 @@ if (typeof window !== "undefined") {
             });
 
             it("responds to synchronous requests", function () {
-                var xhr = new FakeXHR();
+                var xhr = new FakeXMLHttpRequest();
                 xhr.open("GET", "/", false);
                 sinonSpy(xhr, "respond");
 
@@ -488,29 +483,29 @@ if (typeof window !== "undefined") {
             });
 
             it("throws understandable error if response is not a string", function () {
-                var error;
+                var server = this.server;
 
-                try {
-                    this.server.respondWith("/", {});
-                } catch (e) {
-                    error = e;
-                }
-
-                assert.isObject(error);
-                assert.equals(error.message, "Fake server response body should be string, but was object");
+                assert.exception(
+                    function () {
+                        server.respondWith("/", {});
+                    },
+                    {
+                        message: "Fake server response body should be string, but was object"
+                    }
+                );
             });
 
             it("throws understandable error if response in array is not a string", function () {
-                var error;
+                var server = this.server;
 
-                try {
-                    this.server.respondWith("/", [200, {}]);
-                } catch (e) {
-                    error = e;
-                }
-
-                assert.isObject(error);
-                assert.equals(error.message, "Fake server response body should be string, but was undefined");
+                assert.exception(
+                    function () {
+                        server.respondWith("/", [200, {}]);
+                    },
+                    {
+                        message: "Fake server response body should be string, but was undefined"
+                    }
+                );
             });
 
             it("is able to pass the same args to respond directly", function () {

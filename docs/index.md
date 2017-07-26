@@ -1,21 +1,10 @@
 ---
-layout: default
-title: Sinon.JS
+  layout: homepage
+  title: Sinon.JS - Standalone test spies, stubs and mocks for JavaScript. Works with any unit testing framework.
 ---
-
 {% assign current_release = site.sinon.current_release %}
-{% assign next_release = site.sinon.next_release %}
 
-# Sinon.JS
-
-Standalone test spies, stubs and mocks for JavaScript.
-Works with any unit testing framework.
-
-## Getting Sinon.JS
-
-### Download
-
-FIXME: create a download link for each packaged release
+## Get Started
 
 ### Install using `npm`
 
@@ -25,14 +14,13 @@ To install the current release (`{{current_release}}`) of Sinon:
 npm install sinon
 ```
 
-If you're interested in evaluating the next release of Sinon (`{{next_release}}`)
+If you (for some reason) really want the old version of Sinon, head over to the [legacy docs](http://legacy.sinonjs.org/) and do:
 
 ```shell
-npm install sinon@next
+npm install sinon@1
 ```
 
-## Getting started
-
+## Try It Out
 The following function takes a function as its argument and returns a new function. You can call the resulting function as many times as you want, but the original function will only be called once:
 
 ```javascript
@@ -62,7 +50,6 @@ it('calls the original function', function () {
     assert(callback.called);
 });
 ```
-
 
 The fact that the function was only called once is important:
 
@@ -97,7 +84,6 @@ it('calls original function with right this and args', function () {
 
 [Learn more about spies][spies].
 
-
 ### Stubs
 
 The function returned by `once` should return whatever the original function returns. To test this, we create a stub:
@@ -115,7 +101,7 @@ Conveniently, stubs can also be used as spies, e.g. we can query them for their 
 
 [Learn more about stubs][stubs].
 
-## Testing Ajax
+### Testing Ajax
 
 The following function triggers network activity:
 
@@ -149,7 +135,7 @@ it('makes a GET request for todo items', function () {
 });
 ```
 
-## Fake XMLHttpRequest
+### Fake XMLHttpRequest
 
 While the preceding test shows off some nifty Sinon.JS tricks, it is too tightly coupled to the implementation. When testing Ajax, it is better to use Sinon.JS' [fake XMLHttpRequest][fakexhr]:
 
@@ -177,7 +163,7 @@ it("makes a GET request for todo items", function () {
 
 Learn more about [fake XMLHttpRequest][fakexhr].
 
-## Fake server
+### Fake server
 
 The preceding example shows how flexible this API is. If it looks too laborous, you may like the fake server:
 
@@ -204,7 +190,7 @@ it("calls callback with deserialized data", function () {
 
 Test framework integration can typically reduce boilerplate further. [Learn more about the fake server][fakeServer].
 
-## Faking time
+### Faking time
 
 > "I don't always bend time and space in unit tests, but when I do, I use Buster.JS + Sinon.JS"
 
@@ -252,25 +238,18 @@ it('calls callback after 100ms', function () {
 
 As before, Sinon.JS provides utilities that help test frameworks reduce the boiler-plate. [Learn more about fake time][clock].
 
-## And all the rest...
+### And all the rest...
 
 You've seen the most common tasks people tackle with Sinon.JS, yet we've only scratched the surface. View more quick examples below, or dive into the [API docs][api-docs], which also provides useful pointers on how and when to use the various functionality.
 
-## Get help
+### Get help
 
 * [Sinon.JS mailing list][sinon-group]
 * IRC: #sinon.js on freenode
 
-## Sinon.JS elsewhere
+### Sinon.JS elsewhere
 
 * [Testing Backbone applications with Jasmine and Sinon](http://tinnedfruit.com/2011/03/03/testing-backbone-apps-with-jasmine-sinon.html)
-* [Using Sinon.JS with QUnit](http://cjohansen.no/en/javascript/using_sinon_js_with_qunit)
-* [Faking XMLHttpRequests with Sinon.JS 0.6.0](http://cjohansen.no/en/javascript/sinon_js_0_6_0_fake_xmlhttprequest_and_improved_test_framework_integration)
-* [Sinon.JS 0.5.0 announcement](http://cjohansen.no/en/javascript/sinon_js_0_5_0_released)
-* [Faking timers and dates with Sinon.JS](http://cjohansen.no/en/javascript/faking_timers_and_dates_with_sinon)
-* [Sinon.JS test framework integration tools](http://cjohansen.no/en/javascript/higer_level_stubbing_and_mocking_tools_in_sinon)
-* [More spies, stubs and mocks with Sinon.JS](http://cjohansen.no/en/javascript/test_spies_stubs_and_mocks_part_1_5)
-* [Original Sinon.JS announcement](http://cjohansen.no/en/javascript/javascript_test_spies_stubs_and_mocks)
 * [Sinon.JS fake server live demo](https://github.com/ducin/sinon-backend-less-demo)
 
 Christian Johansen's book [Test-Driven JavaScript Development][tddjs] covers some of the design philosophy and initial sketches for Sinon.JS.

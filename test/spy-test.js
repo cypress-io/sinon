@@ -8,6 +8,7 @@ var refute = referee.refute;
 
 function spyCalledTests(method) {
     return function () {
+        // eslint-disable-next-line mocha/no-top-level-hooks
         beforeEach(function () {
             this.spy = createSpy.create();
         });
@@ -69,19 +70,45 @@ function spyCalledTests(method) {
 
             assert(this.spy[method]({ some: sinonMatch.typeOf("string") }));
         });
+
+        // https://github.com/sinonjs/sinon/issues/1245
+        // Using the `calledWithMatch` should work with objects that don't have
+        // a hasOwnProperty function.
+        describe("when called with an Object without a prototype", function () {
+            it("must not throw", function () {
+                var spy = this.spy;
+                var objectWithoutPrototype = Object.create(null);
+
+                objectWithoutPrototype.something = 2;
+
+                spy[method]({
+                    foo: 1,
+                    objectWithoutPrototype: objectWithoutPrototype
+                });
+
+                refute.exception(function () {
+                    spy.calledWithMatch({
+                        objectWithoutPrototype: objectWithoutPrototype
+                    });
+                });
+            });
+        });
     };
 }
 
 function spyAlwaysCalledTests(method) {
     return function () {
+        // eslint-disable-next-line mocha/no-top-level-hooks, mocha/no-sibling-hooks
         beforeEach(function () {
             this.spy = createSpy.create();
         });
 
+        // eslint-disable-next-line mocha/no-identical-title
         it("returns false if spy was not called", function () {
             assert.isFalse(this.spy[method](1, 2, 3));
         });
 
+        // eslint-disable-next-line mocha/no-identical-title
         it("returns true if spy was called with args", function () {
             this.spy(1, 2, 3);
 
@@ -96,6 +123,7 @@ function spyAlwaysCalledTests(method) {
             assert.isFalse(this.spy[method](1, 2, 3));
         });
 
+        // eslint-disable-next-line mocha/no-identical-title
         it("returns false if not called with args", function () {
             this.spy(1, 3, 3);
             this.spy(2);
@@ -104,6 +132,7 @@ function spyAlwaysCalledTests(method) {
             assert.isFalse(this.spy[method](1, 2, 3));
         });
 
+        // eslint-disable-next-line mocha/no-identical-title
         it("returns true for partial match", function () {
             this.spy(1, 3, 3);
 
@@ -119,6 +148,7 @@ function spyAlwaysCalledTests(method) {
             assert(this.spy[method](1, 3));
         });
 
+        // eslint-disable-next-line mocha/no-identical-title
         it("matchs all arguments individually, not as array", function () {
             this.spy([1, 2, 3]);
 
@@ -129,6 +159,7 @@ function spyAlwaysCalledTests(method) {
 
 function spyNeverCalledTests(method) {
     return function () {
+        // eslint-disable-next-line mocha/no-top-level-hooks, mocha/no-sibling-hooks
         beforeEach(function () {
             this.spy = createSpy.create();
         });
@@ -167,6 +198,7 @@ function spyNeverCalledTests(method) {
             assert.isFalse(this.spy[method](1, 3));
         });
 
+        // eslint-disable-next-line mocha/no-identical-title
         it("matchs all arguments individually, not as array", function () {
             this.spy([1, 2, 3]);
 
@@ -185,9 +217,7 @@ describe("spy", function () {
     it("does not throw when calling anonymous spy", function () {
         var spy = createSpy.create();
 
-        refute.exception(function () {
-            spy();
-        });
+        refute.exception(spy);
 
         assert(spy.called);
     });
@@ -280,16 +310,111 @@ describe("spy", function () {
         assert(spy.get.calledOnce);
     });
 
-    it("creates a spy for Error", function () {
-        var originalError = global.Error;
-        try {
-            assert(createSpy(global, "Error"));
-            global.Error = originalError;
-        } catch (e) {
-            // so test failure doesn't trickle down
-            global.Error = originalError;
-            referee.fail("Expected spy to be created");
+    describe("global.Error", function () {
+        beforeEach(function () {
+            this.originalError = global.Error;
+        });
+
+        afterEach(function () {
+            global.Error = this.originalError;
+        });
+
+        it("creates a spy for Error", function () {
+            refute.exception(function () {
+                createSpy(global, "Error");
+            });
+        });
+    });
+
+    it("should work with combination of withArgs arguments and order of calling withArgs", function () {
+        function assertSpy(spy) {
+            // assert callCount
+            assert.equals(spy.callCount, 4);
+            assert.equals(spy.withArgs(1).callCount, 3);
+            assert.equals(spy.withArgs(1, 1).callCount, 1);
+            assert.equals(spy.withArgs(1, 2).callCount, 1);
+
+            // assert call
+            refute.defined(spy.getCall(0).args[0]);
+            assert.equals(spy.getCall(1).args[0], 1);
+            refute.defined(spy.getCall(1).args[1]);
+            assert.equals(spy.getCall(2).args[0], 1);
+            assert.equals(spy.getCall(2).args[1], 1);
+            refute.defined(spy.getCall(2).args[2]);
+            assert.equals(spy.getCall(3).args[0], 1);
+            assert.equals(spy.getCall(3).args[1], 2);
+            refute.defined(spy.getCall(3).args[2]);
+            ["args", "callCount", "callId"].forEach(function (propName) {
+                assert.equals(spy.withArgs(1).getCall(0)[propName],
+                              spy.getCall(1)[propName]);
+                assert.equals(spy.withArgs(1).getCall(1)[propName],
+                              spy.getCall(2)[propName]);
+                assert.equals(spy.withArgs(1).getCall(2)[propName],
+                              spy.getCall(3)[propName]);
+                assert.isNull(spy.withArgs(1).getCall(3));
+                assert.equals(spy.withArgs(1, 1).getCall(0)[propName],
+                              spy.getCall(2)[propName]);
+                assert.isNull(spy.withArgs(1, 1).getCall(1));
+                assert.equals(spy.withArgs(1, 2).getCall(0)[propName],
+                              spy.getCall(3)[propName]);
+                assert.isNull(spy.withArgs(1, 2).getCall(1));
+            });
+
+            // assert firstCall, secondCall, thirdCall, and lastCall
+            assert.equals(spy.firstCall.callId, spy.getCall(0).callId);
+            assert.equals(spy.secondCall.callId, spy.getCall(1).callId);
+            assert.equals(spy.thirdCall.callId, spy.getCall(2).callId);
+            assert.equals(spy.lastCall.callId, spy.getCall(3).callId);
+            assert.equals(spy.withArgs(1).firstCall.callId, spy.withArgs(1).getCall(0).callId);
+            assert.equals(spy.withArgs(1).secondCall.callId, spy.withArgs(1).getCall(1).callId);
+            assert.equals(spy.withArgs(1).thirdCall.callId, spy.withArgs(1).getCall(2).callId);
+            assert.equals(spy.withArgs(1).lastCall.callId, spy.withArgs(1).getCall(2).callId);
+            assert.equals(spy.withArgs(1, 1).firstCall.callId, spy.withArgs(1, 1).getCall(0).callId);
+            assert.isNull(spy.withArgs(1, 1).secondCall);
+            assert.isNull(spy.withArgs(1, 1).thirdCall);
+            assert.equals(spy.withArgs(1, 1).lastCall.callId, spy.withArgs(1, 1).getCall(0).callId);
+            assert.equals(spy.withArgs(1, 2).firstCall.callId, spy.withArgs(1, 2).getCall(0).callId);
+            assert.isNull(spy.withArgs(1, 2).secondCall);
+            assert.isNull(spy.withArgs(1, 2).thirdCall);
+            assert.equals(spy.withArgs(1, 2).lastCall.callId, spy.withArgs(1, 2).getCall(0).callId);
         }
+
+        var object = {
+            f1: function () {},
+            f2: function () {}
+        };
+
+        // f1: the order of withArgs(1), withArgs(1, 1)
+        var spy1 = createSpy(object, "f1");
+        assert.equals(spy1.callCount, 0);
+        assert.equals(spy1.withArgs(1).callCount, 0);
+        assert.equals(spy1.withArgs(1, 1).callCount, 0);
+        assert.isNull(spy1.getCall(0));
+        assert.isNull(spy1.getCall(1));
+        assert.isNull(spy1.getCall(2));
+        assert.isNull(spy1.getCall(3));
+
+        object.f1();
+        object.f1(1);
+        object.f1(1, 1);
+        object.f1(1, 2);
+        assertSpy(spy1);
+
+        // f2: the order of withArgs(1, 1), withArgs(1)
+        var spy2 = createSpy(object, "f2");
+        assert.equals(spy2.callCount, 0);
+        assert.equals(spy2.withArgs(1, 1).callCount, 0);
+        assert.equals(spy2.withArgs(1).callCount, 0);
+        assert.isNull(spy2.getCall(0));
+        assert.isNull(spy2.getCall(1));
+        assert.isNull(spy2.getCall(2));
+        assert.isNull(spy2.getCall(3));
+
+        object.f2();
+        object.f2(1);
+        object.f2(1, 1);
+        object.f2(1, 2);
+        assertSpy(spy2);
     });
 
     describe(".named", function () {
@@ -361,12 +486,7 @@ describe("spy", function () {
                 throw err;
             });
 
-            try {
-                spy();
-                referee.fail("Expected spy to throw exception");
-            } catch (e) {
-                assert.same(e, err);
-            }
+            assert.exception(spy, err);
         });
 
         it("retains function length 0", function () {
@@ -740,7 +860,7 @@ describe("spy", function () {
         });
 
         var applyableNatives = (function () {
-            try {
+            try { // eslint-disable-line no-restricted-syntax
                 console.log.apply({}, []); // eslint-disable-line no-console
                 return true;
             } catch (e) {
@@ -1133,10 +1253,7 @@ describe("spy", function () {
                 throw err;
             });
 
-            try {
-                spy();
-            }
-            catch (e) {} // eslint-disable-line no-empty
+            assert.exception(spy);
 
             assert(spy.threw(err));
         });
@@ -1148,28 +1265,19 @@ describe("spy", function () {
         });
 
         it("returns true if spy threw", function () {
-            try {
-                this.spyWithTypeError();
-            }
-            catch (e) {} // eslint-disable-line no-empty
+            assert.exception(this.spyWithTypeError);
 
             assert(this.spyWithTypeError.threw());
         });
 
         it("returns true if string type matches", function () {
-            try {
-                this.spyWithTypeError();
-            }
-            catch (e) {} // eslint-disable-line no-empty
+            assert.exception(this.spyWithTypeError);
 
             assert(this.spyWithTypeError.threw("TypeError"));
         });
 
         it("returns false if string did not match", function () {
-            try {
-                this.spyWithTypeError();
-            }
-            catch (e) {} // eslint-disable-line no-empty
+            assert.exception(this.spyWithTypeError);
 
             assert.isFalse(this.spyWithTypeError.threw("Error"));
         });
@@ -1181,19 +1289,13 @@ describe("spy", function () {
         });
 
         it("returns true if string matches", function () {
-            try {
-                this.spyWithStringError();
-            }
-            catch (e) {} // eslint-disable-line no-empty
+            assert.exception(this.spyWithStringError);
 
             assert(this.spyWithStringError.threw("error"));
         });
 
         it("returns false if strings do not match", function () {
-            try {
-                this.spyWithStringError();
-            }
-            catch (e) {} // eslint-disable-line no-empty
+            assert.exception(this.spyWithStringError);
 
             assert.isFalse(this.spyWithStringError.threw("not the error"));
         });
@@ -1215,10 +1317,7 @@ describe("spy", function () {
                 throw err;
             });
 
-            try {
-                spy();
-            }
-            catch (e) {} // eslint-disable-line no-empty
+            assert.exception(spy);
 
             assert(spy.alwaysThrew(err));
         });
@@ -1230,28 +1329,19 @@ describe("spy", function () {
         });
 
         it("returns true if spy threw", function () {
-            try {
-                this.spyWithTypeError();
-            }
-            catch (e) {} // eslint-disable-line no-empty
+            assert.exception(this.spyWithTypeError);
 
             assert(this.spyWithTypeError.alwaysThrew());
         });
 
         it("returns true if string type matches", function () {
-            try {
-                this.spyWithTypeError();
-            }
-            catch (e) {} // eslint-disable-line no-empty
+            assert.exception(this.spyWithTypeError);
 
             assert(this.spyWithTypeError.alwaysThrew("TypeError"));
         });
 
         it("returns false if string did not match", function () {
-            try {
-                this.spyWithTypeError();
-            }
-            catch (e) {} // eslint-disable-line no-empty
+            assert.exception(this.spyWithTypeError);
 
             assert.isFalse(this.spyWithTypeError.alwaysThrew("Error"));
         });
@@ -1272,9 +1362,7 @@ describe("spy", function () {
                 }
             });
 
-            try {
-                this.spy();
-            } catch (e) {} // eslint-disable-line no-empty
+            assert.exception(this.spy);
 
             this.spy();
 
@@ -1282,25 +1370,17 @@ describe("spy", function () {
         });
 
         it("returns true if all calls threw", function () {
-            try {
-                this.spyWithTypeError();
-            } catch (e1) {} // eslint-disable-line no-empty
+            assert.exception(this.spyWithTypeError);
 
-            try {
-                this.spyWithTypeError();
-            } catch (e2) {} // eslint-disable-line no-empty
+            assert.exception(this.spyWithTypeError);
 
             assert(this.spyWithTypeError.alwaysThrew());
         });
 
         it("returns true if all calls threw same type", function () {
-            try {
-                this.spyWithTypeError();
-            } catch (e1) {} // eslint-disable-line no-empty
+            assert.exception(this.spyWithTypeError);
 
-            try {
-                this.spyWithTypeError();
-            } catch (e2) {} // eslint-disable-line no-empty
+            assert.exception(this.spyWithTypeError);
 
             assert(this.spyWithTypeError.alwaysThrew("TypeError"));
         });
@@ -1317,9 +1397,7 @@ describe("spy", function () {
         });
 
         it("contains exception thrown by function", function () {
-            try {
-                this.spyWithTypeError();
-            } catch (e) {} // eslint-disable-line no-empty
+            assert.exception(this.spyWithTypeError);
 
             assert.equals(this.spyWithTypeError.exceptions, [this.error]);
         });
@@ -1345,15 +1423,11 @@ describe("spy", function () {
 
             spy();
 
-            try {
-                spy();
-            } catch (e1) {} // eslint-disable-line no-empty
+            assert.exception(spy);
 
             spy();
 
-            try {
-                spy();
-            } catch (e2) {} // eslint-disable-line no-empty
+            assert.exception(spy);
 
             spy();
 
@@ -1472,9 +1546,7 @@ describe("spy", function () {
                 throw new Error();
             });
 
-            try {
-                spy();
-            } catch (e) {} // eslint-disable-line no-empty
+            assert.exception(spy);
 
             assert.equals(spy.returnValues.length, 1);
             refute.defined(spy.returnValues[0]);
@@ -1539,91 +1611,199 @@ describe("spy", function () {
 
     describe(".calledBefore", function () {
         beforeEach(function () {
-            this.spy1 = createSpy();
-            this.spy2 = createSpy();
+            this.spyA = createSpy();
+            this.spyB = createSpy();
         });
 
         it("is function", function () {
-            assert.isFunction(this.spy1.calledBefore);
+            assert.isFunction(this.spyA.calledBefore);
         });
 
         it("returns true if first call to A was before first to B", function () {
-            this.spy1();
-            this.spy2();
+            this.spyA();
+            this.spyB();
 
-            assert(this.spy1.calledBefore(this.spy2));
+            assert(this.spyA.calledBefore(this.spyB));
         });
 
         it("compares call order of calls directly", function () {
-            this.spy1();
-            this.spy2();
+            this.spyA();
+            this.spyB();
 
-            assert(this.spy1.getCall(0).calledBefore(this.spy2.getCall(0)));
+            assert(this.spyA.getCall(0).calledBefore(this.spyB.getCall(0)));
         });
 
         it("returns false if not called", function () {
-            this.spy2();
+            this.spyB();
 
-            assert.isFalse(this.spy1.calledBefore(this.spy2));
+            assert.isFalse(this.spyA.calledBefore(this.spyB));
         });
 
         it("returns true if other not called", function () {
-            this.spy1();
+            this.spyA();
 
-            assert(this.spy1.calledBefore(this.spy2));
+            assert(this.spyA.calledBefore(this.spyB));
         });
 
         it("returns false if other called first", function () {
-            this.spy2();
-            this.spy1();
-            this.spy2();
+            this.spyB();
+            this.spyA();
+            this.spyB();
 
-            assert(this.spy1.calledBefore(this.spy2));
+            assert(this.spyA.calledBefore(this.spyB));
         });
     });
 
     describe(".calledAfter", function () {
         beforeEach(function () {
-            this.spy1 = createSpy();
-            this.spy2 = createSpy();
+            this.spyA = createSpy();
+            this.spyB = createSpy();
         });
 
         it("is function", function () {
-            assert.isFunction(this.spy1.calledAfter);
+            assert.isFunction(this.spyA.calledAfter);
         });
 
         it("returns true if first call to A was after first to B", function () {
-            this.spy2();
-            this.spy1();
+            this.spyB();
+            this.spyA();
 
-            assert(this.spy1.calledAfter(this.spy2));
+            assert(this.spyA.calledAfter(this.spyB));
         });
 
         it("compares calls directly", function () {
-            this.spy2();
-            this.spy1();
+            this.spyB();
+            this.spyA();
 
-            assert(this.spy1.getCall(0).calledAfter(this.spy2.getCall(0)));
+            assert(this.spyA.getCall(0).calledAfter(this.spyB.getCall(0)));
         });
 
         it("returns false if not called", function () {
-            this.spy2();
+            this.spyB();
 
-            assert.isFalse(this.spy1.calledAfter(this.spy2));
+            assert.isFalse(this.spyA.calledAfter(this.spyB));
         });
 
         it("returns false if other not called", function () {
-            this.spy1();
+            this.spyA();
 
-            assert.isFalse(this.spy1.calledAfter(this.spy2));
+            assert.isFalse(this.spyA.calledAfter(this.spyB));
+        });
+
+        it("returns true if called anytime after other", function () {
+            this.spyB();
+            this.spyA();
+            this.spyB();
+
+            assert.isTrue(this.spyA.calledAfter(this.spyB));
+        });
+    });
+
+    describe(".calledImmediatelyAfter", function () {
+        beforeEach(function () {
+            this.spyA = createSpy();
+            this.spyB = createSpy();
+            this.spyC = createSpy();
+        });
+
+        it("is function", function () {
+            assert.isFunction(this.spyA.calledImmediatelyAfter);
+        });
+
+        it("returns true if first call to A was immediately after first to B", function () {
+            this.spyB();
+            this.spyA();
+
+            assert(this.spyA.calledImmediatelyAfter(this.spyB));
+        });
+
+        it("compares calls directly", function () {
+            this.spyB();
+            this.spyA();
+
+            assert(this.spyA.getCall(0).calledImmediatelyAfter(this.spyB.getCall(0)));
+        });
+
+        it("returns false if not called", function () {
+            this.spyB();
+
+            assert.isFalse(this.spyA.calledImmediatelyAfter(this.spyB));
+        });
+
+        it("returns false if other not called", function () {
+            this.spyA();
+
+            assert.isFalse(this.spyA.calledImmediatelyAfter(this.spyB));
         });
 
         it("returns false if other called last", function () {
-            this.spy2();
-            this.spy1();
-            this.spy2();
+            this.spyB();
+            this.spyA();
+            this.spyB();
 
-            assert.isFalse(this.spy1.calledAfter(this.spy2));
+            assert.isFalse(this.spyA.calledImmediatelyAfter(this.spyB));
+        });
+
+        it("returns false if another spy called between", function () {
+            this.spyA();
+            this.spyC();
+            this.spyB();
+
+            assert.isFalse(this.spyB.calledImmediatelyAfter(this.spyA));
+        });
+    });
+
+    describe(".calledImmediatelyBefore", function () {
+        beforeEach(function () {
+            this.spyA = createSpy();
+            this.spyB = createSpy();
+            this.spyC = createSpy();
+        });
+
+        it("is function", function () {
+            assert.isFunction(this.spyA.calledImmediatelyBefore);
+        });
+
+        it("returns true if first call to A was immediately after first to B", function () {
+            this.spyB();
+            this.spyA();
+
+            assert(this.spyB.calledImmediatelyBefore(this.spyA));
+        });
+
+        it("compares calls directly", function () {
+            this.spyB();
+            this.spyA();
+
+            assert(this.spyB.getCall(0).calledImmediatelyBefore(this.spyA.getCall(0)));
+        });
+
+        it("returns false if not called", function () {
+            this.spyB();
+
+            assert.isFalse(this.spyA.calledImmediatelyBefore(this.spyB));
+        });
+
+        it("returns false if other not called", function () {
+            this.spyA();
+
+            assert.isFalse(this.spyA.calledImmediatelyBefore(this.spyB));
+        });
+
+        it("returns false if other called last", function () {
+            this.spyB();
+            this.spyA();
+            this.spyB();
+
+            assert.isFalse(this.spyB.calledImmediatelyBefore(this.spyA));
+        });
+
+        it("returns false if another spy called between", function () {
+            this.spyA();
+            this.spyC();
+            this.spyB();
+
+            assert.isFalse(this.spyA.calledImmediatelyBefore(this.spyB));
         });
     });
 
@@ -1663,10 +1843,7 @@ describe("spy", function () {
                 throw "an exception";
             });
 
-            try {
-                spy();
-            }
-            catch (e) {} // eslint-disable-line no-empty
+            assert.exception(spy);
 
             refute.isNull(spy.firstCall);
         });
@@ -1688,10 +1865,7 @@ describe("spy", function () {
                 throw err;
             });
 
-            try {
-                spy();
-            }
-            catch (e) {} // eslint-disable-line no-empty
+            assert.exception(spy);
 
             assert.same(spy.firstCall.exception, err);
             assert(spy.firstCall.threw(err));
@@ -1867,24 +2041,28 @@ describe("spy", function () {
         it("throws if spy was not yet invoked", function () {
             var spy = createSpy();
 
-            try {
-                spy.callArg(0);
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "spy cannot call arg since it was not yet invoked.");
-            }
+            assert.exception(
+                function () {
+                    spy.callArg(0);
+                },
+                {
+                    message: "spy cannot call arg since it was not yet invoked."
+                }
+            );
         });
 
         it("includes spy name in error message", function () {
             var api = { someMethod: function () {} };
             var spy = createSpy(api, "someMethod");
 
-            try {
-                spy.callArg(0);
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "someMethod cannot call arg since it was not yet invoked.");
-            }
+            assert.exception(
+                function () {
+                    spy.callArg(0);
+                },
+                {
+                    message: "someMethod cannot call arg since it was not yet invoked."
+                }
+            );
         });
 
         it("throws if index is not a number", function () {
@@ -1944,12 +2122,14 @@ describe("spy", function () {
             var spy = createSpy();
             var thisObj = { name1: "value1", name2: "value2" };
 
-            try {
-                spy.callArgOn(0, thisObj);
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "spy cannot call arg since it was not yet invoked.");
-            }
+            assert.exception(
+                function () {
+                    spy.callArgOn(0, thisObj);
+                },
+                {
+                    message: "spy cannot call arg since it was not yet invoked."
+                }
+            );
         });
 
         it("includes spy name in error message", function () {
@@ -1957,12 +2137,14 @@ describe("spy", function () {
             var spy = createSpy(api, "someMethod");
             var thisObj = { name1: "value1", name2: "value2" };
 
-            try {
-                spy.callArgOn(0, thisObj);
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "someMethod cannot call arg since it was not yet invoked.");
-            }
+            assert.exception(
+                function () {
+                    spy.callArgOn(0, thisObj);
+                },
+                {
+                    message: "someMethod cannot call arg since it was not yet invoked."
+                }
+            );
         });
 
         it("throws if index is not a number", function () {
@@ -2028,24 +2210,28 @@ describe("spy", function () {
         it("throws if spy was not yet invoked", function () {
             var spy = createSpy();
 
-            try {
-                spy.yield();
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "spy cannot yield since it was not yet invoked.");
-            }
+            assert.exception(
+                function () {
+                    spy.yield();
+                },
+                {
+                    message: "spy cannot yield since it was not yet invoked."
+                }
+            );
         });
 
         it("includes spy name in error message", function () {
             var api = { someMethod: function () {} };
             var spy = createSpy(api, "someMethod");
 
-            try {
-                spy.yield();
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "someMethod cannot yield since it was not yet invoked.");
-            }
+            assert.exception(
+                function () {
+                    spy.yield();
+                },
+                {
+                    message: "someMethod cannot yield since it was not yet invoked."
+                }
+            );
         });
 
         it("passs additional arguments", function () {
@@ -2094,12 +2280,14 @@ describe("spy", function () {
             var spy = createSpy();
             var thisObj = { name1: "value1", name2: "value2" };
 
-            try {
-                spy.yieldOn(thisObj);
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "spy cannot yield since it was not yet invoked.");
-            }
+            assert.exception(
+                function () {
+                    spy.yieldOn(thisObj);
+                },
+                {
+                    message: "spy cannot yield since it was not yet invoked."
+                }
+            );
         });
 
         it("includes spy name in error message", function () {
@@ -2107,12 +2295,14 @@ describe("spy", function () {
             var spy = createSpy(api, "someMethod");
             var thisObj = { name1: "value1", name2: "value2" };
 
-            try {
-                spy.yieldOn(thisObj);
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "someMethod cannot yield since it was not yet invoked.");
-            }
+            assert.exception(
+                function () {
+                    spy.yieldOn(thisObj);
+                },
+                {
+                    message: "someMethod cannot yield since it was not yet invoked."
+                }
+            );
         });
 
         it("pass additional arguments", function () {
@@ -2152,35 +2342,42 @@ describe("spy", function () {
         it("throws if spy was not yet invoked", function () {
             var spy = createSpy();
 
-            try {
-                spy.yieldTo("success");
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "spy cannot yield to 'success' since it was not yet invoked.");
-            }
+            assert.exception(
+                function () {
+                    spy.yieldTo("success");
+                },
+                {
+                    message: "spy cannot yield to 'success' since it was not yet invoked."
+                }
+            );
         });
 
         it("includes spy name in error message", function () {
             var api = { someMethod: function () {} };
             var spy = createSpy(api, "someMethod");
 
-            try {
-                spy.yieldTo("success");
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "someMethod cannot yield to 'success' since it was not yet invoked.");
-            }
+            assert.exception(
+                function () {
+                    spy.yieldTo("success");
+                },
+                {
+                    message: "someMethod cannot yield to 'success' since it was not yet invoked."
+                }
+            );
         });
 
         it("throws readable message for symbol when spy was not yet invoked", function () {
             if (typeof Symbol === "function") {
                 var spy = createSpy();
 
-                try {
-                    spy.yieldTo(Symbol());
-                } catch (e) {
-                    assert.equals(e.message, "spy cannot yield to 'Symbol()' since it was not yet invoked.");
-                }
+                assert.exception(
+                    function () {
+                        spy.yieldTo(Symbol());
+                    },
+                    {
+                        message: "spy cannot yield to 'Symbol()' since it was not yet invoked."
+                    }
+                );
             }
         });
 
@@ -2222,12 +2419,14 @@ describe("spy", function () {
             var spy = createSpy();
             var thisObj = { name1: "value1", name2: "value2" };
 
-            try {
-                spy.yieldToOn("success", thisObj);
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "spy cannot yield to 'success' since it was not yet invoked.");
-            }
+            assert.exception(
+                function () {
+                    spy.yieldToOn("success", thisObj);
+                },
+                {
+                    message: "spy cannot yield to 'success' since it was not yet invoked."
+                }
+            );
         });
 
         it("includes spy name in error message", function () {
@@ -2235,12 +2434,14 @@ describe("spy", function () {
             var spy = createSpy(api, "someMethod");
             var thisObj = { name1: "value1", name2: "value2" };
 
-            try {
-                spy.yieldToOn("success", thisObj);
-                throw new Error();
-            } catch (e) {
-                assert.equals(e.message, "someMethod cannot yield to 'success' since it was not yet invoked.");
-            }
+            assert.exception(
+                function () {
+                    spy.yieldToOn("success", thisObj);
+                },
+                {
+                    message: "someMethod cannot yield to 'success' since it was not yet invoked."
+                }
+            );
         });
 
         it("throws readable message for symbol when spy was not yet invoked", function () {
@@ -2248,11 +2449,14 @@ describe("spy", function () {
                 var spy = createSpy();
                 var thisObj = { name1: "value1", name2: "value2" };
 
-                try {
-                    spy.yieldToOn(Symbol(), thisObj);
-                } catch (e) {
-                    assert.equals(e.message, "spy cannot yield to 'Symbol()' since it was not yet invoked.");
-                }
+                assert.exception(
+                    function () {
+                        spy.yieldToOn(Symbol(), thisObj);
+                    },
+                    {
+                        message: "spy cannot yield to 'Symbol()' since it was not yet invoked."
+                    }
+                );
             }
         });
 
@@ -2271,6 +2475,59 @@ describe("spy", function () {
         });
     });
 
+    describe(".throwArg", function () {
+        it("should be a function", function () {
+            var spy = createSpy();
+
+            assert.isFunction(spy.throwArg);
+        });
+
+        it("should throw if spy hasn't been called", function () {
+            var spy = createSpy();
+
+            assert.exception(
+                function () {
+                    spy.throwArg(0);
+                },
+                function (error) {
+                    return error.message === "spy cannot throw arg since it was not yet invoked.";
+                }
+            );
+        });
+
+        it("should throw if there aren't enough arguments in the previous spy call", function () {
+            var spy = createSpy();
+
+            spy("only", "four", "arguments", "here");
+
+            assert.exception(
+                function () {
+                    spy.throwArg(7);
+                },
+                function (error) {
+                    return error.message === "Not enough arguments: 7 required but only 4 present";
+                }
+            );
+        });
+
+        it("should throw specified argument", function () {
+            var spy = createSpy();
+            var expectedError = new TypeError("catpants");
+
+            spy(true, false, null, expectedError, "meh");
+            assert.exception(
+                function () {
+                    spy.throwArg(3);
+                },
+                function (error) {
+                    return error instanceof TypeError
+                        && error.message === expectedError.message
+                    ;
+                }
+            );
+        });
+    });
+
     describe(".reset", function () {
         it("return same object", function () {
             var spy = createSpy();
@@ -2284,9 +2541,7 @@ describe("spy", function () {
                 spy.reset();
             });
 
-            assert.exception(function () {
-                spy();
-            }, "InvalidResetException");
+            assert.exception(spy, "InvalidResetException");
         });
     });
 
@@ -2304,4 +2559,44 @@ describe("spy", function () {
             assert.equals(spy.length, 3);
         });
     });
+
+    describe(".matchingFakes", function () {
+        beforeEach(function () {
+            this.spy = createSpy();
+        });
+
+        it("is function", function () {
+            assert.isFunction(this.spy.matchingFakes);
+        });
+
+        it("returns an empty array by default", function () {
+            assert.equals(this.spy.matchingFakes([]), []);
+            assert.equals(this.spy.matchingFakes([1]), []);
+            assert.equals(this.spy.matchingFakes([1, 1]), []);
+        });
+
+        it("returns one matched fake", function () {
+            this.spy.withArgs(1);
+            this.spy.withArgs(2);
+
+            assert.equals(this.spy.matchingFakes([1]), [this.spy.withArgs(1)]);
+            assert.equals(this.spy.matchingFakes([2]), [this.spy.withArgs(2)]);
+        });
+
+        it("return some matched fake", function () {
+            this.spy.withArgs(1);
+            this.spy.withArgs(1, 1);
+            this.spy.withArgs(2);
+
+            assert.equals(this.spy.matchingFakes([]), []);
+            assert.equals(this.spy.matchingFakes([1]), [
+                this.spy.withArgs(1)
+            ]);
+            assert.equals(this.spy.matchingFakes([1, 1]), [
+                this.spy.withArgs(1),
+                this.spy.withArgs(1, 1)
+            ]);
+        });
+    });
 });
+

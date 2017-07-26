@@ -1,6 +1,6 @@
 ---
 layout: page
-title: Fake timers
+title: Fake timers - Sinon.JS
 breadcrumb: fake timers
 ---
 
@@ -11,11 +11,8 @@ test code using them.
 Fake timers provide a `clock` object to pass time, which can also be used to control `Date` objects created through either `new Date();`
 or `Date.now();` (if supported by the browser).
 
-When faking timers with IE you also need `sinon-ie.js`, which
-should be loaded after `sinon.js`.
-
 For standalone usage of fake timers it is recommended to use [lolex](https://github.com/sinonjs/lolex) package instead. It provides the same
-set of features and was previously extracted from Sinon.JS.
+set of features (Sinon uses it under the hood) and was previously extracted from Sinon.JS.
 
 ```javascript
 {
@@ -55,12 +52,17 @@ Starts the clock at the UNIX epoch (timestamp of 0).
 
 As above, but rather than starting the clock with a timestamp of 0, start at the provided timestamp.
 
+*Since `sinon@2.0.0`*
+
+You can also pass in a Date object, and its `getTime()` will be used for the starting timestamp.
 
 #### `var clock = sinon.useFakeTimers([now, ]prop1, prop2, ...);`
 
-Sets the clock start timestamp and names functions to fake.
+Sets the clock start timestamp and names functions to fake. If the first argument is not numeric, it sets the clock to 0 and treats all arguments as names of functions to fake.
 
-Possible functions are `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`, `setImmediate`, `clearImmediate` and `Date`. Can also be called without the timestamp.
+Possible functions are `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`, `setImmediate`, `clearImmediate` and `Date`.  Any functions not listed continue to use the original version of the function, including the actual time for the timestamp. This can have surprising results and should be done with care.
+
+Note that if no functions are listed, the default behavior is to replace all eligible functions.
 
 
 #### `clock.tick(ms);`
